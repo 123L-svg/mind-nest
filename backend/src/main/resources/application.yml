@@ -1,0 +1,129 @@
+server:
+  port: 8080
+  servlet:
+    # 统一接口前缀，浏览器访问 /api/xxx，控制器不再写 /api
+    context-path: /api
+
+spring:
+  application:
+    name: ai-note-backend
+
+  # MySQL（生产/容器可通过环境变量覆盖）
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/ai_note?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:root123456}
+
+  # 文件上传大小限制
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  # Redis（登录限流 / Token 黑名单；生产/容器可通过环境变量覆盖）
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+      password: ${REDIS_PASSWORD:123456}
+      database: 0
+      timeout: 3000ms
+
+  # Elasticsearch（增强版启用，未引入 es 客户端依赖时自动忽略）
+  elasticsearch:
+    uris: ${ES_URIS:http://localhost:9201}
+    connection-timeout: 5s
+    socket-timeout: 10s
+
+  # Jackson 序列化
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+# MyBatis-Plus
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.ainote.module.**.entity
+  global-config:
+    db-config:
+      id-type: assign_id            # 雪花算法主键
+      logic-delete-field: deleted   # 逻辑删除字段
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl # 开发期打印 SQL，生产移除
+
+# MinIO 对象存储（file.store=minio 时启用）
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket-name: ${MINIO_BUCKET:note-files}
+
+# 文件存储
+file:
+  # 存储后端：local（本地磁盘） | minio（MinIO 对象存储）
+  store: ${FILE_STORE:local}
+  upload-dir: ${FILE_UPLOAD_DIR:./upload}
+  access-prefix: ${FILE_ACCESS_PREFIX:/files}
+
+# 全文检索引擎：mysql（LIKE） | elasticsearch（ES 多字段检索，失败自动回退 mysql）
+note:
+  search:
+    engine: ${NOTE_SEARCH_ENGINE:elasticsearch}
+  # 回收站保留天数，超期自动永久清理
+  recycle:
+    keep-days: ${NOTE_RECYCLE_KEEP_DAYS:30}
+
+# 应用启动时是否重建 note 索引（存量数据同步）
+es:
+  reindex-on-start: ${ES_REINDEX_ON_START:true}
+
+# 跨域白名单（开发期 Vite 端口常因占用变为 5175/5176，用端口通配）
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:[*],http://127.0.0.1:[*]}
+
+# SpringDoc 接口文档
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+# JWT
+jwt:
+  secret: ${JWT_SECRET:ai-note-project-secret-key-2024}
+  # token 有效期（毫秒）：默认 1 天
+  expire-time: 86400000
+
+# 第三方 OAuth 登录（GitHub / Gitee）
+# 接入前：在对应平台创建 OAuth 应用，将 client-id/client-secret 通过环境变量注入（勿硬编码提交）。
+# redirect-uri 必须与平台应用后台登记的回调地址完全一致（指向前端回调页 /oauth/callback）。
+oauth:
+  # 总开关
+  enabled: ${OAUTH_ENABLED:true}
+  providers:
+    github:
+      client-id: ${OAUTH_GITHUB_CLIENT_ID:mock-github-client-id}
+      client-secret: ${OAUTH_GITHUB_CLIENT_SECRET:mock-github-secret}
+      redirect-uri: ${OAUTH_GITHUB_REDIRECT_URI:http://localhost:5174/oauth/callback}
+    gitee:
+      client-id: ${OAUTH_GITEE_CLIENT_ID:mock-gitee-client-id}
+      client-secret: ${OAUTH_GITEE_CLIENT_SECRET:mock-gitee-secret}
+      redirect-uri: ${OAUTH_GITEE_REDIRECT_URI:http://localhost:5174/oauth/callback}
+
+# AI 能力（OpenAI 兼容接口，走 ChatAnywhere 聚合服务）
+# 接口地址固定为 https://api.chatanywhere.tech/v1（国内直连）。
+# 注意：当前 ChatAnywhere 免费 key 仅允许 deepseek-red / gpt-3.5-turbo / gpt-4o-mini / gpt-4o 等，不含 Gemini，
+#        故选用 gpt-4o-mini（性价比高、稳定）。
+# 接入前：设置环境变量 AI_API_KEY=你的ChatAnywhere APIKey
+# mock-enabled: 无 key 或为 true 时返回模拟结果便于联调；填好 key 后设 false 接真实模型
+ai:
+  base-url: ${AI_BASE_URL:https://api.chatanywhere.tech/v1}
+  api-key: ${AI_API_KEY:}
+  model: ${AI_MODEL:gpt-4o-mini}
+  timeout-millis: 60000
+  mock-enabled: ${AI_MOCK_ENABLED:true}

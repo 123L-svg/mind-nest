@@ -1,0 +1,97 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ai-note-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: ai_note
+      TZ: Asia/Shanghai
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      # 宿主机端口为避免与本机已有服务冲突，使用 33x 段
+      - "23306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 首次启动自动建表
+      - ./backend/src/main/resources/sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: ai-note-redis
+    command: redis-server --requirepass 123456
+    ports:
+      - "26380:6379"
+
+  minio:
+    image: minio/minio:latest
+    container_name: ai-note-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "29000:9000"
+      - "29001:9001"
+    volumes:
+      - minio-data:/data
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ai-note-backend
+    extra_hosts:
+      # Windows/Mac Docker Desktop：容器内访问宿主机 ES（9201 映射）
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root123456
+      JWT_SECRET: ${JWT_SECRET:-ai-note-project-secret-key-2024}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.chatanywhere.tech/v1}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+      AI_MOCK_ENABLED: ${AI_MOCK_ENABLED:-true}
+      FILE_UPLOAD_DIR: /app/upload
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:[*],http://127.0.0.1:[*]}
+      ES_URIS: ${ES_URIS:-http://host.docker.internal:9201}
+      NOTE_SEARCH_ENGINE: ${NOTE_SEARCH_ENGINE:-elasticsearch}
+      ES_REINDEX_ON_START: ${ES_REINDEX_ON_START:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: "123456"
+      FILE_STORE: minio
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: note-files
+      NOTE_RECYCLE_KEEP_DAYS: ${NOTE_RECYCLE_KEEP_DAYS:-30}
+    ports:
+      # 仅内网；对外统一走前端 Nginx
+      - "8080:8080"
+    volumes:
+      - upload-data:/app/upload
+
+  web:
+    build: ./frontend
+    container_name: ai-note-web
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  mysql-data:
+  upload-data:
+  minio-data:

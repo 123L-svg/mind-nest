@@ -1,0 +1,38 @@
+/**
+ * 设计令牌：全局语义变量（明 / 暗双套）。
+ * - 项目语义变量：--c-*（背景/表面/文字/边框/主色等）、--r-*（圆角）、--shadow-*（阴影）
+ * - 通过 html[data-theme="dark"] 切换暗色，供页面与组件统一引用。
+ */
+:root {
+  /* 色彩语义 */
+  --c-bg: #f5f7fa;            /* 页面背景 */
+  --c-surface: #ffffff;       /* 卡片/内容表面 */
+  --c-surface-sub: #fafafa;   /* 次级表面 */
+  --c-text: #1f2937;          /* 主文字 */
+  --c-text-sub: #909399;      /* 次级文字 */
+  --c-border: #e4e7ed;        /* 边框 */
+  --c-divider: rgba(0, 0, 0, 0.06);
+  --c-primary: #409eff;       /* 主色 */
+  --c-danger: #f56c6c;
+  --c-warning: #e6a23c;
+  --c-success: #67c23a;
+
+  /* 圆角 / 阴影 / 间距 */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.10);
+}
+
+html[data-theme="dark"] {
+  --c-bg: #141414;
+  --c-surface: #1d1e1f;
+  --c-surface-sub: #26272a;
+  --c-text: #e5eaf3;
+  --c-text-sub: #a3a6ad;
+  --c-border: #363637;
+  --c-divider: rgba(255, 255, 255, 0.08);
+  --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.50);
+}

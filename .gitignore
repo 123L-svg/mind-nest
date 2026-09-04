@@ -1,0 +1,29 @@
+# Maven 本地仓库（沙箱编译用）
+.m2_repo/
+
+# 构建产物
+backend/target/
+**/target/
+dist/
+# Docker 部署打包的可执行 jar（体积大，不入库）
+backend/app.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# 日志与临时文件
+*.log
+logs/
+
+# 环境与密钥（切勿提交真实密钥）
+**.env
+application-local.yml
+
+# 前端依赖
+node_modules/
+
+# 运行时上传文件（用户数据，不入库）
+backend/upload/

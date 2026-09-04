@@ -1,0 +1,21 @@
+/**
+ * 深色模式：覆盖 Element Plus 的主题 CSS 变量。
+ * 需与 tokens.css 中 html[data-theme="dark"] 配合启用。
+ */
+html[data-theme="dark"] {
+  --el-color-primary: #409eff;
+  --el-bg-color: #1d1e1f;
+  --el-bg-color-page: #141414;
+  --el-bg-color-overlay: #1d1e1f;
+  --el-fill-color-blank: #1d1e1f;
+  --el-fill-color-light: #26272a;
+  --el-fill-color-lighter: #2b2b2c;
+  --el-text-color-primary: #e5eaf3;
+  --el-text-color-regular: #c0c4cc;
+  --el-text-color-secondary: #a3a6ad;
+  --el-border-color: #363637;
+  --el-border-color-light: #2e2e30;
+  --el-border-color-lighter: #26272a;
+  --el-border-color-extra-light: #202021;
+  --el-box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}

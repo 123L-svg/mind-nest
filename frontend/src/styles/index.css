@@ -1,0 +1,47 @@
+/**
+ * 全局样式入口：reset + 基础排版 + 通用工具类。
+ * 引用顺序：tokens(变量) → 本文件 → dark 变量覆盖（随 data-theme 生效）。
+ */
+@import './tokens.css';
+@import './dark.css';
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  min-height: 100%;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--c-bg);
+  color: var(--c-text);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+#app { min-height: 100vh; }
+
+a { color: var(--c-primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* 通用工具类（可选，页面可复用） */
+.muted { color: var(--c-text-sub); }
+
+/* 全局组件观感统一（圆角/边框/阴影用设计令牌） */
+.el-card {
+  border-radius: var(--r-md);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--shadow-md);
+}
+.el-main { background: var(--c-bg); }
+
+/* ES 搜索高亮：后端返回 <em> 片段经 v-html 注入，scoped 选择器无法命中，
+   故放全局并配半透明背景以同时适配明/暗主题 */
+.tl em,
+.hl em {
+  color: var(--c-warning);
+  font-style: normal;
+  background: rgba(230, 162, 60, 0.18);
+  border-radius: 2px;
+  padding: 0 1px;
+}
