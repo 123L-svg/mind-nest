@@ -5,7 +5,7 @@
       <el-aside class="sider" width="240px">
         <div class="sider-brand">
           <el-icon :size="22"><Notebook /></el-icon>
-          <span class="brand">AI 笔记</span>
+          <span class="brand">MindNest</span>
         </div>
         <div class="sider-create">
           <el-input v-model="newKbName" size="small" placeholder="新建知识库"

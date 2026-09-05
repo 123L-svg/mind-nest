@@ -3,7 +3,7 @@
     <el-card class="login-card" shadow="never">
       <div class="brand">
         <div class="brand-logo"><el-icon :size="24"><Notebook /></el-icon></div>
-        <h1 class="brand-name">AI 笔记</h1>
+        <h1 class="brand-name">MindNest（智巢）</h1>
         <p class="brand-sub">智能笔记 · 知识库 · 随处创作</p>
       </div>
 

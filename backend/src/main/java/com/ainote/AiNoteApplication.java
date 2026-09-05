@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * AI 智能笔记与知识库系统 - 启动类
+ * MindNest（智巢）· AI 智能笔记与知识库系统 - 启动类
  */
 @SpringBootApplication
 @EnableAsync

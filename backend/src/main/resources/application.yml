@@ -6,7 +6,7 @@ server:
 
 spring:
   application:
-    name: ai-note-backend
+    name: mind-nest-backend
 
   # MySQL（生产/容器可通过环境变量覆盖）
   datasource:

@@ -21,10 +21,10 @@ public class OpenApiConfig {
         String schemeName = "BearerAuth";
         return new OpenAPI()
                 .info(new Info()
-                        .title("AI 智能笔记与知识库系统 API")
+                        .title("MindNest（智巢）· AI 智能笔记与知识库系统 API")
                         .description("笔记管理、知识库分类、AI 辅助创作")
                         .version(version)
-                        .contact(new Contact().name("ai-note-team")))
+                        .contact(new Contact().name("mind-nest-team")))
                 .components(new Components().addSecuritySchemes(schemeName,
                         new SecurityScheme()
                                 .type(SecurityScheme.Type.HTTP)
