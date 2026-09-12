@@ -41,7 +41,7 @@ ai-note-system/
 └── README.md
 ```
 
-## 一、本地开发（无 Docker）
+## 一、本地开发
 
 ### 环境要求
 - JDK 21、Maven 3.9+
