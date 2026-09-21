@@ -10,7 +10,9 @@
 - 📚 知识库：增删改查、公开/私有切换、无登录公开分享页
 - 📝 笔记：富文本编辑（WangEditor）、分类、标签、回收站、关键词搜索、浏览计数
 - 🤖 AI 能力：大纲生成、内容润色、摘要生成、基于笔记问答（OpenAI 兼容接口，mock 兜底）
-- 🖼️ 文件：上传（本地磁盘）、绑定笔记、详情回显
+- � AI 异步任务：RabbitMQ 解耦异步生成（生产者入队 → 消费者处理 → 前端轮询），含手动 ACK / 重试 / 幂等 / 死信队列
+- 🧯 接口限流：Redis 令牌桶（自研注解 + AOP），公开分享 / 文件上传 / AI 调用按 IP 限流防滥用
+- �️ 文件：上传（本地磁盘 / MinIO）、绑定笔记、详情回显、防盗链
 - 📊 运营：操作日志（AOP）、数据统计面板
 - 📤 导出：笔记导出 Markdown / PDF
 
@@ -18,7 +20,7 @@
 
 | 端 | 技术 |
 | :--- | :--- |
-| 后端 | Spring Boot 3.2 / Spring Security + JWT / MyBatis-Plus / MySQL 8 / Hutool / SpringDoc OpenAPI / AOP |
+| 后端 | Spring Boot 3.2 / Spring Security + JWT / MyBatis-Plus / MySQL 8 / Redis / RabbitMQ / MinIO / AOP / Hutool / SpringDoc OpenAPI |
 | 前端 | Vue 3 / Vite / WangEditor / Pinia / Vue Router / Axios |
 | AI | OpenAI 兼容接口（ChatAnywhere 聚合，`gpt-4o-mini`） |
 | 部署 | Docker / Docker Compose / Nginx |
@@ -79,7 +81,7 @@ Vite 已将 `/api` 代理到后端 `8080`，无需跨域配置。
 # 1. 复制并编辑环境变量（AI Key、JWT 密钥）
 cp .env.example .env
 
-# 2. 启动全部服务（MySQL + 后端 + 前端）
+# 2. 启动全部服务（MySQL + Redis + RabbitMQ + 后端 + 前端）
 docker compose up -d --build
 ```
 
@@ -88,6 +90,7 @@ docker compose up -d --build
 | 前端 web | 80 | 访问入口 `http://localhost/`（Nginx 反代 API） |
 | 后端 backend | 8080 | Swagger `http://localhost:8080/api/swagger-ui.html` |
 | MySQL | 3306 | 数据卷 mysql-data，首次启动自动执行 init.sql |
+| RabbitMQ | 2672 / 25672 | 消息队列（AI 异步任务）；宿主机 `2672`→AMQP(5672)、`25672`→管理控制台(15672) |
 
 常用命令：`docker compose logs -f` 查看日志、`docker compose down` 停止、`docker compose ps` 查看状态。
 
@@ -104,6 +107,7 @@ docker compose up -d --build
 | `AI_MODEL` | `gpt-4o-mini` | 模型名 |
 | `AI_MOCK_ENABLED` | `true` | `true` 返回模拟结果；填 Key 后设 `false` 走真实模型 |
 | `FILE_UPLOAD_DIR` | `./upload` | 文件本地存储目录（Docker 内 `/app/upload` 挂载数据卷） |
+| `RABBITMQ_HOST / RABBITMQ_PORT / RABBITMQ_USER / RABBITMQ_PASSWORD` | `localhost:5672 guest/guest` | 消息队列（AI 异步任务，本地联调需先启动） |
 
 ## 四、核心接口
 
@@ -118,6 +122,7 @@ docker compose up -d --build
 | 标签 | `GET/POST/DELETE /api/tag/*` |
 | 笔记 | `GET/POST/PUT /api/note/*` `DELETE /api/note/delete/{id}` `PUT /api/note/restore/{id}` `GET /api/note/recycle` |
 | AI | `POST /api/ai/generate-outline` `POST /api/ai/polish` `POST /api/ai/summarize` `POST /api/ai/chat` |
+| AI 异步 | `POST /api/ai/async`（MQ 入队，返回 taskId） `GET /api/ai/task/{taskId}`（轮询状态/结果） |
 | 文件 | `POST /api/file/upload` `GET /api/file/list` `DELETE /api/file/delete/{id}` `GET /api/files/**`* |
 | 导出 | `GET /api/export/markdown/{noteId}` |
 | 统计 | `GET /api/stats/overview` |
@@ -125,6 +130,34 @@ docker compose up -d --build
 | 公开分享 | `GET /api/public/kb/{id}` `GET /api/public/note/{id}`（免登录）* |
 
 完整接口见 Swagger：`/api/swagger-ui.html`。
+
+## 五、工程化亮点
+
+### 5.1 AI 异步任务（RabbitMQ 解耦）
+把「AI 生成」从同步直连改为**生产与消费解耦**：接口入队即返回 `taskId`，消费者异步生成并回写，前端轮询结果。可用于削峰、避免慢 AI 阻塞请求。
+
+```
+前端 ──POST /api/ai/async（JWT）──► 生产者：写 ai_task → 发布 MQ
+     └── 立即返回 taskId
+RabbitMQ ──► 消费者：手动ACK + 调AI + 写回 ai_task.result
+前端 ──GET /api/ai/task/{taskId}（轮询）──► 终态取 result
+```
+
+可靠性设计：
+- **手动 ACK**：`ackMode=MANUAL`，业务成功才 `basicAck`，避免消息丢失。
+- **重试**：失败 `basicNack(requeue=true)` 重入队，重试次数持久化在任务记录。
+- **死信队列(DLX)**：重试 3 次耗尽后 `NACK(requeue=false)`，由 Broker 转入死信队列兜底。
+- **幂等**：`tryProcess` 仅从「待处理(status=0)」抢占（依赖 UPDATE 行锁互斥），并发/重复投递下只能一个消费者抢占成功，其余直接跳过；重试路径先把任务恢复为待处理再重入队，兼顾客并发去重与重试。
+
+关键代码：`common/mq/RabbitConfig`、`module/ai/service/AiTaskService`（生产者）、`module/ai/consumer/AiAsyncConsumer`（消费者）、`module/ai/entity/AiTask`。
+
+### 5.2 接口限流（自研 Redis 令牌桶 + AOP）
+通过自定义 `@RateLimit` 注解 + AOP 切面，按客户端 IP 对公开分享 / 文件上传 / AI 调用做令牌桶限流，防滥用与刷接口。
+- **令牌桶**：桶容量允许瞬时突发，补充速率限制平均流量；Lua 脚本保证「补令牌 + 扣减」原子性。
+- **降级放行**：Redis 异常时放行，与登录限流一致——**限流失效不拖垮主流程**（可用性设计）。
+- **可配置**：`@RateLimit(key, capacity, refillPerSecond, message)` 挂在对应 Controller 方法上即可。
+
+关键代码：`common/ratelimit/RateLimit`（注解）、`RateLimitAspect`（切面）、`RateLimitService`（Redis 令牌桶）。
 
 ## 开发规范
 见 [backend/DEVELOPMENT.md](backend/DEVELOPMENT.md)：统一返回、全局异常、RESTful 路径、JWT 鉴权、逻辑删除、命名与提交规范。

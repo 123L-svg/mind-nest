@@ -27,6 +27,21 @@ services:
     ports:
       - "26380:6379"
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: ai-note-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "2672:5672"        # AMQP
+      - "25672:15672"      # 管理控制台
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
   minio:
     image: minio/minio:latest
     container_name: ai-note-minio
@@ -53,11 +68,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      rabbitmq:
+        condition: service_started
     environment:
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_USER: root
       MYSQL_PASSWORD: root123456
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
       JWT_SECRET: ${JWT_SECRET:-ai-note-project-secret-key-2024}
       AI_BASE_URL: ${AI_BASE_URL:-https://api.chatanywhere.tech/v1}
       AI_API_KEY: ${AI_API_KEY:-}

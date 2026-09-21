@@ -36,6 +36,18 @@ spring:
     connection-timeout: 5s
     socket-timeout: 10s
 
+  # RabbitMQ（AI 异步任务解耦；生产/容器可通过环境变量覆盖）
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    # 消费端手动 ACK：由业务代码决定确认/重试/进死信，保证消息可靠性
+    listener:
+      simple:
+        acknowledge-mode: manual
+        default-requeue-rejected: false
+
   # Jackson 序列化
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
@@ -92,6 +104,12 @@ springdoc:
     path: /swagger-ui.html
   api-docs:
     path: /v3/api-docs
+
+# AI 异步任务 MQ 拓扑（交换机/队列/路由键）
+mq:
+  ai-task-exchange: ${MQ_AI_TASK_EXCHANGE:ai.task.exchange}
+  ai-task-queue: ${MQ_AI_TASK_QUEUE:ai.task.queue}
+  ai-task-routing-key: ${MQ_AI_TASK_ROUTING_KEY:ai.task}
 
 # JWT
 jwt:

@@ -69,7 +69,11 @@ export const aiApi = {
   outline: (data) => http.post('/ai/generate-outline', data),
   polish: (data) => http.post('/ai/polish', data),
   summarize: (data) => http.post('/ai/summarize', data),
-  chat: (data) => http.post('/ai/chat', data)
+  chat: (data) => http.post('/ai/chat', data),
+  /** 异步任务（MQ 解耦）：提交入队 → data: {taskId} */
+  asyncSubmit: (data) => http.post('/ai/async', data),
+  /** 查询异步任务状态（轮询）：data: {taskId,status,statusText,result,errorMsg} */
+  asyncTask: (taskId) => http.get(`/ai/task/${taskId}`)
 }
 
 // 文件

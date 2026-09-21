@@ -89,6 +89,12 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- RabbitMQ（AI 异步任务解耦 / 削峰） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
         <!-- MinIO 对象存储 -->
         <dependency>
             <groupId>io.minio</groupId>

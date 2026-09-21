@@ -165,6 +165,27 @@ CREATE TABLE IF NOT EXISTS `note_version` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='笔记版本历史表';
 
 -- -----------------------------------------------------------
+-- 11. AI 异步任务表（MQ 解耦：生产者入队后由消费者异步生成并回写结果）
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `ai_task` (
+    `id`          BIGINT       NOT NULL COMMENT '任务ID（雪花，对外即 taskId）',
+    `user_id`     BIGINT       NOT NULL COMMENT '发起用户ID',
+    `action`      VARCHAR(32)  NOT NULL COMMENT '动作：outline/polish/summarize/chat',
+    `title`       VARCHAR(128) DEFAULT NULL COMMENT '笔记标题',
+    `content`     LONGTEXT     COMMENT '笔记内容',
+    `question`    VARCHAR(512) DEFAULT NULL COMMENT '用户问题',
+    `status`      TINYINT      NOT NULL DEFAULT 0 COMMENT '状态 0待处理 1处理中 2成功 3失败',
+    `result`      LONGTEXT     COMMENT 'AI 生成结果（成功后写入）',
+    `error_msg`   VARCHAR(512) DEFAULT NULL COMMENT '失败原因',
+    `retry_count` INT          NOT NULL DEFAULT 0 COMMENT '已重试次数',
+    `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI 异步任务表';
+
+-- -----------------------------------------------------------
 -- 10. 已有库升级（第三方登录）：对非全新初始化重复执行无效，可安全运行
 -- -----------------------------------------------------------
 ALTER TABLE `sys_user`

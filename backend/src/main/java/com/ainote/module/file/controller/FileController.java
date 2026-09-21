@@ -1,5 +1,6 @@
 package com.ainote.module.file.controller;
 
+import com.ainote.common.ratelimit.RateLimit;
 import com.ainote.common.result.Result;
 import com.ainote.common.util.SecurityUtil;
 import com.ainote.module.file.service.FileStorageService;
@@ -38,6 +39,7 @@ public class FileController {
 
     @Operation(summary = "上传文件")
     @PostMapping("/upload")
+    @RateLimit(key = "file", capacity = 5, refillPerSecond = 1, message = "上传过于频繁，请稍后再试")
     public Result<FileVO> upload(@RequestParam("file") MultipartFile file) {
         return Result.success(fileStorageService.upload(SecurityUtil.getUserId(), file));
     }

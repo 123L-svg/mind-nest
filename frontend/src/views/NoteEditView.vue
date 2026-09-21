@@ -63,6 +63,31 @@
               <el-button v-if="ai.action === 'outline'" type="primary" size="small"
                          class="insert-btn" @click="insertOutline">插入正文</el-button>
             </div>
+
+            <el-divider />
+            <b>异步任务（MQ）</b>
+            <el-tag type="info" size="small" style="margin:6px 0 10px">入队后由消费者异步生成，前端轮询结果</el-tag>
+            <div class="ai-async">
+              <el-select v-model="asyncForm.action" style="width:100%" placeholder="选择动作">
+                <el-option label="生成大纲" value="outline" />
+                <el-option label="润色内容" value="polish" />
+                <el-option label="生成摘要" value="summarize" />
+                <el-option label="内容问答" value="chat" />
+              </el-select>
+              <el-button type="primary" style="width:100%" :loading="asyncBusy"
+                         :disabled="asyncForm.action !== 'chat' && !form.content" @click="submitAsync">
+                提交异步任务
+              </el-button>
+              <div v-if="asyncTask.status != null" class="async-state">
+                <span>状态：</span>
+                <el-tag :type="asyncStatusTag(asyncTask.status)">{{ asyncTask.statusText }}</el-tag>
+              </div>
+              <el-alert v-if="asyncTask.errorMsg" type="error" :closable="false"
+                        :title="asyncTask.errorMsg" style="margin-top:8px" />
+              <div v-if="asyncTask.result" class="ai-result">
+                <pre>{{ asyncTask.result }}</pre>
+              </div>
+            </div>
           </el-card>
         </el-col>
       </el-row>
@@ -321,8 +346,69 @@ async function askChat() {
   catch (e) { window.$message?.error(e.message) } finally { aiBusy.value = false }
 }
 
+// ============ 异步任务（MQ 解耦 + 轮询） ============
+const asyncForm = ref({ action: 'outline' })
+const asyncTask = ref({})           // {taskId,status,statusText,result,errorMsg}
+const asyncBusy = ref(false)
+let pollTimer = null
+const TERMINAL = [2, 3]
+
+function asyncStatusTag(status) {
+  if (status === 2) return 'success'
+  if (status === 3) return 'danger'
+  if (status === 0) return 'info'
+  return 'warning'
+}
+
+function asyncPayload() {
+  return {
+    action: asyncForm.value.action,
+    title: form.value.title,
+    content: plainText(),
+    question: chatQuestion.value || (asyncForm.value.action === 'chat' ? '' : null)
+  }
+}
+
+async function submitAsync() {
+  asyncBusy.value = true
+  asyncTask.value = {}
+  try {
+    const res = await aiApi.asyncSubmit(asyncPayload())
+    await pollAsyncTask(res.data.taskId)
+  } catch (e) {
+    window.$message?.error(e.message)
+    asyncBusy.value = false
+  }
+}
+
+/** 提交后轮询：非终态则延迟重查，终态停止 */
+function pollAsyncTask(taskId) {
+  return new Promise((resolve) => {
+    const run = async () => {
+      try {
+        asyncTask.value = (await aiApi.asyncTask(taskId)).data
+      } catch { /* 网络抖动忽略，继续轮询 */ }
+      if (TERMINAL.includes(asyncTask.value.status)) {
+        asyncBusy.value = false
+        if (asyncTask.value.status === 3) {
+          window.$message?.error(asyncTask.value.errorMsg || '任务处理失败')
+        } else {
+          window.$message?.success('异步任务已完成')
+        }
+        resolve()
+      } else if (asyncBusy.value) {
+        pollTimer = setTimeout(run, 1500)
+      } else {
+        resolve()
+      }
+    }
+    run()
+  })
+}
+
 onBeforeUnmount(() => {
   clearTimeout(autoSaveTimer)
+  clearTimeout(pollTimer)
   editorRef.value?.destroy()
 })
 onMounted(async () => {
@@ -347,5 +433,7 @@ onMounted(async () => {
 .ai-btns { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .ai-result { margin-top: 12px; background: #f5f7fa; border-radius: 6px; padding: 10px; max-height: 40vh; overflow: auto; }
 .ai-result pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; }
+.ai-async { display: flex; flex-direction: column; gap: 10px; }
+.async-state { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .insert-btn { margin-top: 10px; width: 100%; }
 </style>

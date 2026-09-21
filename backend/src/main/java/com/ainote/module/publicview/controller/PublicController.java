@@ -1,5 +1,6 @@
 package com.ainote.module.publicview.controller;
 
+import com.ainote.common.ratelimit.RateLimit;
 import com.ainote.common.result.Result;
 import com.ainote.module.kb.service.KnowledgeBaseService;
 import com.ainote.module.kb.vo.KbVO;
@@ -31,12 +32,14 @@ public class PublicController {
 
     @Operation(summary = "公开知识库详情")
     @GetMapping("/kb/{id}")
+    @RateLimit(key = "public", capacity = 10, refillPerSecond = 5)
     public Result<KbVO> kb(@PathVariable("id") Long id) {
         return Result.success(kbService.publicDetail(id));
     }
 
     @Operation(summary = "公开知识库的笔记列表")
     @GetMapping("/kb/{id}/notes")
+    @RateLimit(key = "public", capacity = 10, refillPerSecond = 5)
     public Result<List<NoteVO>> notes(@PathVariable("id") Long id,
                                       @RequestParam(value = "keyword", required = false) String keyword) {
         kbService.checkPublic(id);
@@ -45,6 +48,7 @@ public class PublicController {
 
     @Operation(summary = "公开笔记详情")
     @GetMapping("/note/{id}")
+    @RateLimit(key = "public", capacity = 10, refillPerSecond = 5)
     public Result<NoteVO> note(@PathVariable("id") Long id) {
         Note note = noteService.checkPublicReadable(id);
         kbService.checkPublic(note.getKbId());
