@@ -425,18 +425,18 @@ onMounted(async () => {
 
 <style scoped>
 .editor-page { min-height: 100vh; }
-.bar { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--c-border); }
+.bar { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--c-border); background: var(--c-surface); }
 .edit-title { flex: 1; font-weight: 600; }
-.body { background: #f5f7fa; }
+.body { background: var(--c-bg); }
 .main-card { margin-bottom: 16px; }
 .meta { display: flex; gap: 12px; width: 100%; }
-.editor-box { border: 1px solid #dcdfe6; border-radius: 6px; overflow: hidden; width: 100%; }
+.editor-box { border: 1px solid var(--c-border); border-radius: var(--r-md); overflow: hidden; width: 100%; }
 .editor-toolbar { border-bottom: 1px solid var(--c-border); }
 .editor-body { min-height: 380px; }
 .editor-body :deep(.w-e-text-container) { min-height: 380px; }
 .side { position: sticky; top: 12px; }
 .ai-btns { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-.ai-result { margin-top: 12px; background: #f5f7fa; border-radius: 6px; padding: 10px; max-height: 40vh; overflow: auto; }
+.ai-result { margin-top: 12px; background: var(--c-surface-sub); border-radius: var(--r-md); padding: 10px; max-height: 40vh; overflow: auto; }
 .ai-result pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; }
 .ai-async { display: flex; flex-direction: column; gap: 10px; }
 .async-state { display: flex; align-items: center; gap: 8px; font-size: 13px; }

@@ -81,7 +81,7 @@ onMounted(async () => {
 .search-row { display: flex; gap: 10px; }
 .notes-menu { border-right: none; }
 .note-item { display: flex; flex-direction: column; gap: 4px; width: 100%; }
-.muted { color: #909399; font-size: 13px; }
+.muted { color: var(--c-text-sub); font-size: 13px; }
 .hl { display: block; font-size: 13px; color: var(--c-text-sub); line-height: 1.5; margin-top: 2px; }
 .rich { line-height: 1.7; }
 .rich img { max-width: 100%; }

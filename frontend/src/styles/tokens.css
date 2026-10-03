@@ -23,6 +23,13 @@
   --r-lg: 12px;
   --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.10);
+
+  /* 渐变 / 悬浮 / 过渡 */
+  --grad-brand: linear-gradient(135deg, #409eff 0%, #36cfc9 100%);
+  --grad-brand-soft: linear-gradient(135deg, rgba(64, 158, 255, 0.10) 0%, rgba(54, 207, 201, 0.10) 100%);
+  --shadow-hover: 0 6px 20px rgba(64, 158, 255, 0.14);
+  --t-fast: 0.18s ease;
+  --t-base: 0.25s ease;
 }
 
 html[data-theme="dark"] {
@@ -35,4 +42,5 @@ html[data-theme="dark"] {
   --c-divider: rgba(255, 255, 255, 0.08);
   --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.50);
+  --shadow-hover: 0 6px 20px rgba(64, 158, 255, 0.25);
 }

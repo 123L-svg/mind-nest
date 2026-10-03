@@ -84,32 +84,52 @@
         </el-header>
 
         <el-main class="content">
-          <el-card class="notes-card">
-            <el-alert v-if="!currentKb" title="请先在左侧选择一个知识库" type="info" :closable="false" />
-            <template v-else>
-              <el-table :data="notes" v-loading="notesLoading" empty-text="暂无笔记">
-                <el-table-column label="标题" min-width="140">
-                  <template #default="{ row }">
-                    <span v-if="row.highlight" class="tl" v-html="hlHtml(row.highlight)"></span>
-                    <span v-else>{{ row.title }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="词数" width="80" align="center">
-                  <template #default="{ row }">{{ row.wordCount }}</template>
-                </el-table-column>
-                <el-table-column label="浏览" width="90" align="center">
-                  <template #default="{ row }">{{ row.viewCount }}</template>
-                </el-table-column>
-                <el-table-column label="操作" width="200">
-                  <template #default="{ row }">
-                    <el-button link type="primary" @click="editNote(row.id)">编辑</el-button>
-                    <el-button link type="success" @click="viewDetail(row.id)">详情</el-button>
-                    <el-button link type="danger" @click="removeNote(row.id)">删</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </template>
-          </el-card>
+          <el-alert v-if="!currentKb" title="请先在左侧选择一个知识库" type="info" :closable="false" />
+          <template v-else>
+            <!-- 加载骨架屏 -->
+            <div v-if="notesLoading" class="note-grid">
+              <div v-for="i in 8" :key="i" class="note-card sk-card">
+                <el-skeleton :rows="2" animated />
+              </div>
+            </div>
+
+            <!-- 笔记卡片流 -->
+            <div v-else-if="notes.length" class="note-grid">
+              <div v-for="row in notes" :key="row.id" class="note-card card-hover"
+                   @click="viewDetail(row.id)">
+                <div class="note-ops">
+                  <el-icon :size="15" title="编辑" @click.stop="editNote(row.id)"><Edit /></el-icon>
+                  <el-icon :size="15" title="删除" class="op-danger" @click.stop="removeNote(row.id)">
+                    <Delete />
+                  </el-icon>
+                </div>
+                <div class="note-title">
+                  <span v-if="row.highlight" class="tl" v-html="hlHtml(row.highlight)"></span>
+                  <span v-else>{{ row.title || '（无标题）' }}</span>
+                </div>
+                <div class="note-summary">{{ row.summary || '暂无摘要，点击查看全文内容…' }}</div>
+                <div class="note-tags" v-if="row.tags?.length">
+                  <el-tag v-for="t in row.tags.slice(0, 3)" :key="t.id" size="small" effect="plain">
+                    {{ t.name }}
+                  </el-tag>
+                </div>
+                <div class="note-meta" :title="'更新于 ' + formatDateTime(row.updateTime)">
+                  <span class="meta-item"><el-icon><Clock /></el-icon>{{ formatDate(row.updateTime) }}</span>
+                  <span class="meta-item"><el-icon><View /></el-icon>{{ row.viewCount || 0 }}</span>
+                  <span class="meta-item"><el-icon><Document /></el-icon>{{ row.wordCount || 0 }} 字</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 空状态引导 -->
+            <div v-else class="empty-wrap">
+              <AppEmpty :description="noteKeyword ? '没有找到相关笔记，换个关键词试试' : '这个知识库还没有笔记'">
+                <el-button v-if="!noteKeyword" type="primary" @click="createNote">
+                  <el-icon style="margin-right:4px"><Plus /></el-icon>写下第一篇笔记
+                </el-button>
+              </AppEmpty>
+            </div>
+          </template>
         </el-main>
       </el-container>
     </el-container>
@@ -125,12 +145,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Notebook, Sunny, Moon, Plus, Setting, SwitchButton } from '@element-plus/icons-vue'
+import { Notebook, Sunny, Moon, Plus, Setting, SwitchButton, Edit, Delete, Clock, View, Document } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { useTheme } from '@/composables/useTheme'
 import { kbApi, noteApi, authApi } from '@/api'
 import { THEME } from '@/constants'
-import { hlHtml, initials } from '@/utils/format'
+import { hlHtml, initials, formatDate, formatDateTime } from '@/utils/format'
+import AppEmpty from '@/components/AppEmpty.vue'
 
 const router = useRouter()
 const store = useUserStore()
@@ -280,8 +301,15 @@ onMounted(() => { refreshInfo(); loadKbs() })
   border-right: 1px solid var(--c-border);
 }
 .sider-brand {
-  display: flex; align-items: center; gap: 8px;
-  padding: 18px 16px 14px; color: var(--c-primary); font-weight: 700; font-size: 17px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 18px 16px 14px; color: var(--c-text); font-weight: 700; font-size: 17px;
+}
+.sider-brand :deep(.el-icon) {
+  width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  background: var(--grad-brand);
+  color: #fff;
 }
 .sider-create { padding: 0 12px 10px; }
 .sider-head {
@@ -316,6 +344,66 @@ onMounted(() => { refreshInfo(); loadKbs() })
 
 /* 内容区 */
 .content { background: var(--c-bg); padding: 20px; }
+
+/* 笔记卡片流 */
+.note-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 14px;
+}
+.note-card {
+  position: relative;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 16px 12px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  min-height: 148px;
+}
+.sk-card { cursor: default; }
+.note-title {
+  font-size: 15px; font-weight: 600; color: var(--c-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding-right: 44px;
+}
+.note-summary {
+  flex: 1;
+  font-size: 13px; line-height: 1.6; color: var(--c-text-sub);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.note-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.note-meta {
+  display: flex; align-items: center; gap: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--c-divider);
+  color: var(--c-text-sub); font-size: 12px;
+}
+.meta-item { display: inline-flex; align-items: center; gap: 4px; }
+.meta-item .el-icon { font-size: 13px; }
+
+/* 卡片悬浮操作按钮 */
+.note-ops {
+  position: absolute; top: 12px; right: 12px;
+  display: flex; gap: 8px;
+  color: var(--c-text-sub);
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+.note-card:hover .note-ops { opacity: 1; }
+.note-ops .el-icon { cursor: pointer; padding: 3px; border-radius: var(--r-sm); }
+.note-ops .el-icon:hover { color: var(--c-primary); background: var(--c-surface-sub); }
+.note-ops .op-danger:hover { color: var(--c-danger); }
+
+/* 空状态 */
+.empty-wrap {
+  display: flex; justify-content: center;
+  padding: 60px 0;
+}
+
 .rich img { max-width: 100%; }
 .rich { line-height: 1.7; }
 

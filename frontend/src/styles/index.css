@@ -29,9 +29,32 @@ a:hover { text-decoration: underline; }
 
 /* 全局组件观感统一（圆角/边框/阴影用设计令牌） */
 .el-card {
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   border: 1px solid var(--c-border);
   box-shadow: var(--shadow-md);
+  transition: box-shadow var(--t-base), border-color var(--t-base), transform var(--t-base);
+}
+
+/* 细滚动条（适配明暗主题） */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb {
+  background: var(--c-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--c-text-sub); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* 路由切换过渡（App.vue 内 <transition name="fade-slide">） */
+.fade-slide-enter-active,
+.fade-slide-leave-active { transition: opacity 0.18s ease, transform 0.18s ease; }
+.fade-slide-enter-from { opacity: 0; transform: translateY(8px); }
+.fade-slide-leave-to { opacity: 0; transform: translateY(-4px); }
+
+/* 卡片悬浮微交互（供列表卡片复用） */
+.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--c-primary);
 }
 .el-main { background: var(--c-bg); }
 

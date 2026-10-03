@@ -64,9 +64,9 @@ onMounted(load)
 
 <style scoped>
 .page { min-height: 100vh; }
-.bar { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--c-border); }
+.bar { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--c-border); background: var(--c-surface); }
 .title { flex: 1; font-weight: 600; }
-.body { background: #f5f7fa; }
+.body { background: var(--c-bg); }
 .add-row { display: flex; gap: 10px; }
 .tags { display: flex; flex-wrap: wrap; gap: 8px; }
 </style>

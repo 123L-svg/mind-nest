@@ -51,5 +51,5 @@ onMounted(async () => {
 .cb-wrap { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
 .cb-card { width: 360px; }
 .title { font-weight: 600; }
-.center { padding: 24px; text-align: center; color: #909399; }
+.center { padding: 24px; text-align: center; color: var(--c-text-sub); }
 </style>

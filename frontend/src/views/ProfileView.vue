@@ -122,10 +122,10 @@ onMounted(load)
 
 <style scoped>
 .page { min-height: 100vh; }
-.bar { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--c-border); }
+.bar { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--c-border); background: var(--c-surface); }
 .title { flex: 1; font-weight: 600; }
-.body { background: #f5f7fa; }
+.body { background: var(--c-bg); }
 .avatar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
 .hidden { display: none; }
-.muted { color: #909399; font-size: 12px; margin-top: 4px; width: 100%; }
+.muted { color: var(--c-text-sub); font-size: 12px; margin-top: 4px; width: 100%; }
 </style>
