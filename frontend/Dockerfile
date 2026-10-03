@@ -3,9 +3,11 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY package.json ./
-RUN npm install --registry=https://registry.npmmirror.com 2>/dev/null || npm install
+RUN npm install --registry=https://registry.npmmirror.com
 
 COPY . .
+# 确保 vite 等二进制有执行权限（防止宿主环境权限位丢失导致 Permission denied）
+RUN chmod +x node_modules/.bin/*
 RUN npm run build
 
 # ============ 运行阶段（Nginx） ============

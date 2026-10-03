@@ -1,0 +1,6 @@
+# 前端构建上下文专用忽略
+node_modules
+dist
+.git
+*.log
+.env.local

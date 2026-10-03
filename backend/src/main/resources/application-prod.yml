@@ -1,0 +1,14 @@
+# 生产环境配置覆盖
+# 通过 SPRING_PROFILES_ACTIVE=prod 激活
+
+mybatis-plus:
+  configuration:
+    # 生产关闭 SQL 日志，避免敏感数据打到 stdout
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+
+# 生产关闭 Swagger 文档暴露
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
