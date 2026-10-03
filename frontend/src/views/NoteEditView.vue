@@ -252,11 +252,6 @@ async function bindFilesToNote(noteId) {
   } catch (e) { console.warn('文件绑定到笔记失败', e.message) }
 }
 
-function applyAi(res, fn) {
-  ai.value = { action: res.data.action, mock: res.data.mock, result: res.data.result }
-  if (fn) fn(res.data.result)
-}
-
 /** 简易 Markdown -> HTML（覆盖 AI 大纲常用标题/列表） */
 function markdownToHtml(md) {
   let html = ''
@@ -324,34 +319,61 @@ async function exportPdf() {
   } catch (e) { window.$message?.error('导出失败：' + e.message) }
 }
 
-async function genOutline() {
-  aiBusy.value = true; ai.value = { ...ai.value, result: '' }
-  try { const res = await aiApi.outline({ title: form.value.title, content: plainText() }); applyAi(res) }
-  catch (e) { window.$message?.error(e.message) } finally { aiBusy.value = false }
+/** 同步 AI 按钮统一改造：提交异步 MQ + 轮询，解决真实模型推理可能超时的问题 */
+async function submitAiAsync(action) {
+  if (action !== 'chat' && !form.content) return
+  if (action === 'chat' && !chatQuestion.value) return
+  aiBusy.value = true
+  ai.value = { ...ai.value, result: '', action }
+  try {
+    const res = await aiApi.asyncSubmit({
+      action,
+      title: form.value.title,
+      content: plainText(),
+      question: action === 'chat' ? chatQuestion.value : null
+    })
+    const task = await pollTask(res.data.taskId)
+    if (task && task.status === 3) {
+      window.$message?.error(task.errorMsg || 'AI 任务处理失败')
+    } else if (task) {
+      window.$message?.success('AI 处理完成')
+      ai.value.result = task.result
+      if (action === 'summarize') form.value.summary = task.result
+    }
+  } catch (e) {
+    window.$message?.error(e.message)
+  } finally {
+    aiBusy.value = false
+  }
 }
-async function polish() {
-  aiBusy.value = true; ai.value = { ...ai.value, result: '' }
-  try { const res = await aiApi.polish({ content: plainText() }); applyAi(res) }
-  catch (e) { window.$message?.error(e.message) } finally { aiBusy.value = false }
-}
-async function summarize() {
-  aiBusy.value = true; ai.value = { ...ai.value, result: '' }
-  try { const res = await aiApi.summarize({ content: plainText() }); applyAi(res, (txt) => { form.value.summary = txt }) }
-  catch (e) { window.$message?.error(e.message) } finally { aiBusy.value = false }
-}
-async function askChat() {
-  if (!chatQuestion.value) return
-  aiBusy.value = true; ai.value = { ...ai.value, result: '' }
-  try { const res = await aiApi.chat({ content: plainText(), question: chatQuestion.value }); applyAi(res) }
-  catch (e) { window.$message?.error(e.message) } finally { aiBusy.value = false }
-}
+function genOutline() { submitAiAsync('outline') }
+function polish() { submitAiAsync('polish') }
+function summarize() { submitAiAsync('summarize') }
+function askChat() { submitAiAsync('chat') }
 
 // ============ 异步任务（MQ 解耦 + 轮询） ============
 const asyncForm = ref({ action: 'outline' })
 const asyncTask = ref({})           // {taskId,status,statusText,result,errorMsg}
 const asyncBusy = ref(false)
-let pollTimer = null
 const TERMINAL = [2, 3]
+const unmounted = ref(false)
+let pollTimers = new Set()
+
+/** 通用轮询：直到终态（2成功/3失败）或组件卸载。卸载时 resolve(null) */
+function pollTask(taskId) {
+  return new Promise((resolve) => {
+    const rec = { id: null }
+    pollTimers.add(rec)
+    const run = async () => {
+      if (unmounted.value) { pollTimers.delete(rec); return resolve(null) }
+      let t = {}
+      try { t = (await aiApi.asyncTask(taskId)).data } catch { /* 瞬时错误忽略，继续轮询 */ }
+      if (TERMINAL.includes(t.status)) { pollTimers.delete(rec); return resolve(t) }
+      rec.id = setTimeout(run, 1500)
+    }
+    run()
+  })
+}
 
 function asyncStatusTag(status) {
   if (status === 2) return 'success'
@@ -374,41 +396,24 @@ async function submitAsync() {
   asyncTask.value = {}
   try {
     const res = await aiApi.asyncSubmit(asyncPayload())
-    await pollAsyncTask(res.data.taskId)
+    const task = await pollTask(res.data.taskId)
+    if (task) {
+      asyncTask.value = task
+      if (task.status === 3) window.$message?.error(task.errorMsg || '任务处理失败')
+      else window.$message?.success('异步任务已完成')
+    }
   } catch (e) {
     window.$message?.error(e.message)
+  } finally {
     asyncBusy.value = false
   }
 }
 
-/** 提交后轮询：非终态则延迟重查，终态停止 */
-function pollAsyncTask(taskId) {
-  return new Promise((resolve) => {
-    const run = async () => {
-      try {
-        asyncTask.value = (await aiApi.asyncTask(taskId)).data
-      } catch { /* 网络抖动忽略，继续轮询 */ }
-      if (TERMINAL.includes(asyncTask.value.status)) {
-        asyncBusy.value = false
-        if (asyncTask.value.status === 3) {
-          window.$message?.error(asyncTask.value.errorMsg || '任务处理失败')
-        } else {
-          window.$message?.success('异步任务已完成')
-        }
-        resolve()
-      } else if (asyncBusy.value) {
-        pollTimer = setTimeout(run, 1500)
-      } else {
-        resolve()
-      }
-    }
-    run()
-  })
-}
-
 onBeforeUnmount(() => {
+  unmounted.value = true
   clearTimeout(autoSaveTimer)
-  clearTimeout(pollTimer)
+  pollTimers.forEach((rec) => clearTimeout(rec.id))
+  pollTimers.clear()
   editorRef.value?.destroy()
 })
 onMounted(async () => {
