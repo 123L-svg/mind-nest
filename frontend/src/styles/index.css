@@ -24,6 +24,39 @@ body {
 a { color: var(--c-primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+/* ============ 页面骨架（次级页面统一） ============ */
+.page-shell {
+  display: flex; flex-direction: column;
+  min-height: 100vh;
+  background: var(--c-bg);
+}
+/* 内容容器：限宽居中，超宽屏下保证可读性 */
+.page-container {
+  width: 100%;
+  max-width: var(--c-page-max);
+  margin: 0 auto;
+  padding: 20px;
+  flex: 1;
+}
+.page-container + .page-container { padding-top: 0; }
+
+/* 卡片标题统一用展示字体 */
+.el-card__header b,
+.el-card__header .card-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+}
+/* 统计数字用展示字体 */
+.el-statistic__number { font-family: var(--font-display); }
+
+/* 图标 + 文字按钮：自动对齐间距 */
+.el-btn-icon { gap: 6px; }
+
+@media (max-width: 640px) {
+  .page-container { padding: 14px; }
+}
+
 /* 通用工具类（可选，页面可复用） */
 .muted { color: var(--c-text-sub); }
 

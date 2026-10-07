@@ -24,4 +24,7 @@ public class UserInfoVO {
 
     @Schema(description = "邮箱")
     private String email;
+
+    @Schema(description = "第三方登录类型（github/gitee），普通账号为空")
+    private String oauthType;
 }

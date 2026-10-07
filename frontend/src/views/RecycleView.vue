@@ -1,14 +1,15 @@
 <template>
-  <div class="page">
-    <el-header class="bar">
-      <el-button @click="back">返回</el-button>
-      <div class="title">回收站</div>
-      <el-button @click="load">刷新</el-button>
-    </el-header>
-    <el-main class="body">
+  <div class="page page-shell">
+    <PageHeader title="回收站" subtitle="删除的笔记会保留在此，可恢复或永久删除">
+      <el-button size="small" @click="load">刷新</el-button>
+    </PageHeader>
+
+    <main class="page-container">
       <el-card>
-        <el-table :data="list" empty-text="回收站为空">
-          <el-table-column prop="title" label="标题" min-width="180" />
+        <el-table :data="list" empty-text="回收站是空的，很干净">
+          <el-table-column prop="title" label="标题" min-width="180">
+            <template #default="{ row }">{{ row.title || '（无标题）' }}</template>
+          </el-table-column>
           <el-table-column label="删除于" width="200">
             <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
           </el-table-column>
@@ -23,17 +24,16 @@
           </el-table-column>
         </el-table>
       </el-card>
-    </el-main>
+    </main>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import PageHeader from '@/components/PageHeader.vue'
 import { noteApi } from '@/api'
 import { formatDateTime } from '@/utils/format'
 
-const router = useRouter()
 const list = ref([])
 
 async function load() {
@@ -55,13 +55,9 @@ async function purge(id) {
   await load()
 }
 
-function back() { router.push('/dashboard') }
 onMounted(load)
 </script>
 
 <style scoped>
 .page { min-height: 100vh; }
-.bar { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--c-border); background: var(--c-surface); }
-.title { flex: 1; font-weight: 600; }
-.body { background: var(--c-bg); }
 </style>

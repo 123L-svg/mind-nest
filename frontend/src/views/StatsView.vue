@@ -1,11 +1,10 @@
 <template>
-  <div class="page">
-    <el-header class="bar">
-      <el-button @click="router.push('/dashboard')">返回</el-button>
-      <div class="title">数据概览</div>
-      <el-button @click="loadAll">刷新</el-button>
-    </el-header>
-    <el-main class="body">
+  <div class="page page-shell">
+    <PageHeader title="数据概览" subtitle="笔记产出、热门内容与操作记录一览">
+      <el-button size="small" @click="loadAll">刷新</el-button>
+    </PageHeader>
+
+    <main class="page-container">
       <el-row :gutter="16" class="cards">
         <el-col :xs="12" :md="6">
           <el-card class="stat-card card-hover">
@@ -66,13 +65,13 @@
           </el-table-column>
         </el-table>
       </el-card>
-    </el-main>
+    </main>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import PageHeader from '@/components/PageHeader.vue'
 import { Document, Collection, Delete, View } from '@element-plus/icons-vue'
 import * as echarts from 'echarts/core'
 import { BarChart, LineChart, PieChart } from 'echarts/charts'
@@ -87,7 +86,6 @@ echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, Leg
 // 统一清爽配色（与品牌渐变同系）
 const CHART_COLORS = ['#409eff', '#36cfc9', '#9254de', '#ffc53d', '#ff7a45', '#73d13d']
 
-const router = useRouter()
 const stats = ref({})
 const logs = ref([])
 const trendRef = ref(null)
@@ -181,13 +179,6 @@ onBeforeUnmount(() => { window.removeEventListener('resize', resize); disposeAll
 
 <style scoped>
 .page { min-height: 100vh; }
-.bar {
-  display: flex; align-items: center; gap: 12px;
-  background: var(--c-surface);
-  border-bottom: 1px solid var(--c-border);
-}
-.title { flex: 1; font-weight: 600; }
-.body { background: var(--c-bg); }
 .cards { margin-bottom: 16px; }
 .recent { margin-bottom: 16px; }
 .chart { height: 240px; }

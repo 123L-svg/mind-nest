@@ -1,10 +1,8 @@
 <template>
-  <div class="page">
-    <el-header class="bar">
-      <el-button @click="back">返回</el-button>
-      <div class="title">标签管理</div>
-    </el-header>
-    <el-main class="body">
+  <div class="page page-shell">
+    <PageHeader title="标签管理" subtitle="标签可跨知识库复用，帮助你快速归类与检索" />
+
+    <main class="page-container">
       <el-card>
         <template #header><b>添加标签</b></template>
         <div class="add-row">
@@ -14,25 +12,25 @@
         </div>
       </el-card>
 
-      <el-card style="margin-top:16px">
+      <el-card class="tags-card">
         <template #header><b>我的标签（{{ list.length }}）</b></template>
         <div v-if="list.length" class="tags">
-          <el-tag v-for="t in list" :key="t.id" closable @close="remove(t.id)" :disable-transitions="true">
-            {{ t.name }}
+          <el-tag v-for="t in list" :key="t.id" closable size="large" effect="plain" round
+                  class="tag-chip" @close="remove(t.id)" :disable-transitions="true">
+            # {{ t.name }}
           </el-tag>
         </div>
-        <el-empty v-else description="暂无标签" :image-size="80" />
+        <el-empty v-else description="还没有标签，先在上方添加一个吧" :image-size="90" />
       </el-card>
-    </el-main>
+    </main>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import PageHeader from '@/components/PageHeader.vue'
 import { tagApi } from '@/api'
 
-const router = useRouter()
 const list = ref([])
 const name = ref('')
 const saving = ref(false)
@@ -58,15 +56,23 @@ async function remove(id) {
   await load()
 }
 
-function back() { router.push('/dashboard') }
 onMounted(load)
 </script>
 
 <style scoped>
 .page { min-height: 100vh; }
-.bar { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--c-border); background: var(--c-surface); }
-.title { flex: 1; font-weight: 600; }
-.body { background: var(--c-bg); }
 .add-row { display: flex; gap: 10px; }
-.tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.add-row .el-input { flex: 1; }
+.tags-card { margin-top: 16px; }
+.tags { display: flex; flex-wrap: wrap; gap: 10px; }
+/* 标签胶囊：悬浮上浮 + 主色描边 */
+.tag-chip {
+  cursor: default;
+  transition: transform var(--t-fast), border-color var(--t-fast);
+}
+.tag-chip:hover {
+  transform: translateY(-2px);
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+}
 </style>

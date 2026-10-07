@@ -45,8 +45,10 @@ onMounted(async () => {
 .badge:hover .name { opacity: .8; }
 .avatar {
   width: 30px; height: 30px; border-radius: 50%; overflow: hidden;
-  background: #e5e7eb; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--c-surface-sub);
+  border: 1px solid var(--c-border);
+  display: inline-flex; align-items: center; justify-content: center;
 }
-.avatar i { font-style: normal; font-weight: 600; color: #4b5563; font-size: 13px; }
+.avatar i { font-style: normal; font-weight: 600; color: var(--c-text-sub); font-size: 13px; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
 </style>
