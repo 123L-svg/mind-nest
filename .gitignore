@@ -25,5 +25,10 @@ application-local.yml
 # 前端依赖
 node_modules/
 
+# Playwright 集成测试产物
+.playwright/
+test-results/
+playwright-report/
+
 # 运行时上传文件（用户数据，不入库）
 backend/upload/
