@@ -15,7 +15,7 @@
 
     <main class="page-container">
       <el-row :gutter="16">
-        <el-col :xs="24" :md="17">
+        <el-col :xs="24" :lg="17">
           <el-card class="main-card">
             <el-form label-position="top">
               <el-form-item label="笔记标题">
@@ -48,7 +48,7 @@
           </el-card>
         </el-col>
 
-        <el-col :xs="24" :md="7">
+        <el-col :xs="24" :lg="7">
           <el-card class="side">
             <template #header>
               <div class="side-head">
@@ -65,19 +65,19 @@
                 </template>
                 <div class="ai-btns">
                   <el-button class="ai-quick" :loading="aiBusy" @click="genOutline">
-                    <el-icon><EditPen /></el-icon>生成大纲
+                    <el-icon v-show="!aiBusy"><EditPen /></el-icon><span>生成大纲</span>
                   </el-button>
                   <el-button class="ai-quick" :loading="aiBusy" :disabled="!form.content" @click="polish">
-                    <el-icon><MagicStick /></el-icon>润色内容
+                    <el-icon v-show="!aiBusy"><MagicStick /></el-icon><span>润色内容</span>
                   </el-button>
                   <el-button class="ai-quick" :loading="aiBusy" :disabled="!form.content" @click="summarize">
-                    <el-icon><Tickets /></el-icon>生成摘要
+                    <el-icon v-show="!aiBusy"><Tickets /></el-icon><span>生成摘要</span>
                   </el-button>
                 </div>
                 <div class="chat-row">
                   <el-input v-model="chatQuestion" placeholder="基于内容提问，回车发送"
                             clearable @keyup.enter="askChat" :disabled="!form.content" />
-                  <el-button :icon="Promotion" type="primary" :loading="aiBusy"
+                  <el-button class="chat-send" :icon="Promotion" type="primary" :loading="aiBusy"
                              :disabled="!form.content || !chatQuestion" @click="askChat" />
                 </div>
                 <el-alert v-if="aiBusy" title="AI 处理中，请稍候…" type="info" :closable="false"
@@ -102,8 +102,12 @@
                     <el-option label="生成摘要" value="summarize" />
                     <el-option label="内容问答" value="chat" />
                   </el-select>
+                  <el-input v-if="asyncForm.action === 'chat'" v-model="asyncQuestion"
+                            class="async-question" placeholder="请输入要提问的问题" clearable />
                   <el-button type="primary" class="async-submit" :loading="asyncBusy"
-                             :disabled="asyncForm.action !== 'chat' && !form.content" @click="submitAsync">
+                             :disabled="(asyncForm.action !== 'chat' && !form.content)
+                                        || (asyncForm.action === 'chat' && !asyncQuestion)"
+                             @click="submitAsync">
                     提交异步任务
                   </el-button>
                   <div v-if="asyncTask.status != null" class="async-state">
@@ -391,6 +395,7 @@ function askChat() { submitAiAsync('chat') }
 
 // ============ 异步任务（MQ 解耦 + 轮询） ============
 const asyncForm = ref({ action: 'outline' })
+const asyncQuestion = ref('')
 const asyncTask = ref({})           // {taskId,status,statusText,result,errorMsg}
 const asyncBusy = ref(false)
 const TERMINAL = [2, 3]
@@ -425,7 +430,7 @@ function asyncPayload() {
     action: asyncForm.value.action,
     title: form.value.title,
     content: plainText(),
-    question: chatQuestion.value || (asyncForm.value.action === 'chat' ? '' : null)
+    question: asyncForm.value.action === 'chat' ? asyncQuestion.value : null
   }
 }
 
@@ -470,23 +475,25 @@ onMounted(async () => {
 .meta { display: flex; gap: 12px; width: 100%; }
 .meta-select { flex: 1; max-width: 220px; }
 
-/* 富文本编辑器 */
+/* 富文本编辑器：高度随视口自适应，避免大块空白或过矮 */
 .editor-box {
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
   overflow: hidden; width: 100%;
 }
 .editor-toolbar { border-bottom: 1px solid var(--c-border); background: var(--c-surface-sub); }
-.editor-body { min-height: 380px; }
-.editor-body :deep(.w-e-text-container) { min-height: 380px; }
+.editor-body { min-height: clamp(320px, 46vh, 560px); }
+.editor-body :deep(.w-e-text-container) { min-height: clamp(320px, 46vh, 560px); }
 
-/* 右侧 AI 面板：吸顶跟随 */
-.side {
-  position: sticky;
-  top: calc(var(--header-h) + 12px);
+/* 右侧 AI 面板：仅大屏（lg+）吸顶跟随；中窄屏堆叠在全宽下 */
+.side :deep(.el-card__body) { padding: 16px 20px 20px; }
+@media (min-width: 1200px) {
+  .side {
+    position: sticky;
+    top: calc(var(--header-h) + 12px);
+  }
 }
-.side :deep(.el-card__body) { padding-top: 12px; }
-.side-head { display: flex; align-items: center; justify-content: space-between; }
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .side-title {
   display: inline-flex; align-items: center; gap: 6px;
   font-family: var(--font-display);
@@ -501,22 +508,30 @@ onMounted(async () => {
 }
 .tab-label .el-icon { font-size: 14px; }
 
-/* 快捷工具按钮：整行、图标与文字对齐 */
-.ai-btns { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+/* 快捷工具按钮：面板窄时单列竖排，面板宽（堆叠全宽）时自动一行三列；
+   图标/文字间距交给 EP 内置规则（el-icon + span），loading 时文字位置不跳动 */
+.ai-btns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
 .ai-quick {
   width: 100%;
   justify-content: flex-start;
 }
-.ai-quick .el-icon { margin-right: 8px; }
 
-/* 问答行：输入框 + 发送按钮 */
+/* 问答行：输入框自适应、发送按钮固定不被压缩 */
 .chat-row { display: flex; gap: 8px; }
+.chat-row :deep(.el-input) { flex: 1; min-width: 0; }
+.chat-send { flex-shrink: 0; width: 40px; }
 .ai-busy-alert { margin-top: 12px; }
 
 /* 任务中心 */
 .mq-hint { margin: 0 0 12px; font-size: 12px; line-height: 1.6; color: var(--c-text-sub); }
 .ai-async { display: flex; flex-direction: column; gap: 10px; }
 .async-select { width: 100%; }
+.async-question { width: 100%; }
 .async-submit { width: 100%; }
 .async-state { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .async-error { margin-top: 2px; }
@@ -534,7 +549,6 @@ onMounted(async () => {
 .insert-btn { margin-top: 10px; width: 100%; }
 
 @media (max-width: 768px) {
-  .side { position: static; }
   .meta { flex-direction: column; }
   .meta-select { max-width: none; }
 }
