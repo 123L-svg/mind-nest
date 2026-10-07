@@ -29,12 +29,13 @@
             </div>
           </el-menu-item>
         </el-menu>
-        <div class="sider-links">
-          <el-button text size="small" @click="router.push('/categories')">分类</el-button>
-          <el-button text size="small" @click="router.push('/tags')">标签</el-button>
-          <el-button text size="small" @click="router.push('/recycle')">回收站</el-button>
-          <el-button text size="small" @click="router.push('/stats')">数据概览</el-button>
-        </div>
+        <nav class="sider-links">
+          <button v-for="l in links" :key="l.path" class="sider-link"
+                  :class="{ active: route.path === l.path }" @click="router.push(l.path)">
+            <el-icon><component :is="l.icon" /></el-icon>
+            <span>{{ l.label }}</span>
+          </button>
+        </nav>
       </el-aside>
 
       <!-- 右侧：顶部栏 + 笔记内容 -->
@@ -144,8 +145,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { Notebook, Sunny, Moon, Plus, Setting, SwitchButton, Edit, Delete, Clock, View, Document } from '@element-plus/icons-vue'
+import { useRouter, useRoute } from 'vue-router'
+import { Notebook, Sunny, Moon, Plus, Setting, SwitchButton, Edit, Delete, Clock, View, Document, Folder, CollectionTag, TrendCharts } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { useTheme } from '@/composables/useTheme'
 import { kbApi, noteApi, authApi } from '@/api'
@@ -154,6 +155,15 @@ import { hlHtml, initials, formatDate, formatDateTime } from '@/utils/format'
 import AppEmpty from '@/components/AppEmpty.vue'
 
 const router = useRouter()
+const route = useRoute()
+
+/* 侧边栏底部快捷入口 */
+const links = [
+  { path: '/categories', label: '分类', icon: Folder },
+  { path: '/tags', label: '标签', icon: CollectionTag },
+  { path: '/recycle', label: '回收站', icon: Delete },
+  { path: '/stats', label: '数据概览', icon: TrendCharts },
+]
 const store = useUserStore()
 const { theme, toggle: toggleTheme } = useTheme()
 const isDark = computed(() => theme.value === THEME.DARK)
@@ -323,9 +333,30 @@ onMounted(() => { refreshInfo(); loadKbs() })
 .kb-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .kb-count { color: var(--c-text-sub); font-size: 12px; }
 .sider-links {
-  display: flex; flex-wrap: wrap; gap: 2px;
-  padding: 8px 10px; border-top: 1px solid var(--c-divider);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 10px 10px 12px;
+  border-top: 1px solid var(--c-divider);
 }
+.sider-link {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--c-text);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.sider-link:hover { background: var(--c-surface-sub); color: var(--c-primary); }
+.sider-link.active { background: var(--grad-brand-soft); color: var(--c-primary); font-weight: 600; }
+.sider-link .el-icon { font-size: 15px; flex-shrink: 0; }
 
 /* 顶部栏 */
 .topbar {

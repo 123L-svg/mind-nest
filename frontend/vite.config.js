@@ -21,8 +21,13 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true
+        // 默认代理到本地后端；联调线上时可用 VITE_PROXY_TARGET=http://47.98.112.16 覆盖
+        // （后端 CORS 仅放行正式域名，联调需同时改写 Origin 头）
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8080',
+        changeOrigin: true,
+        headers: process.env.VITE_PROXY_TARGET
+          ? { Origin: process.env.VITE_PROXY_TARGET }
+          : undefined
       }
     }
   }

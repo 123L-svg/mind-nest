@@ -53,8 +53,6 @@
           <el-button class="oauth-btn" :loading="oauthing === 'github'" @click="oauthStart('github')">GitHub</el-button>
           <el-button class="oauth-btn" :loading="oauthing === 'gitee'" @click="oauthStart('gitee')">Gitee</el-button>
         </div>
-
-        <p class="tip">联调账号：tester / 123456</p>
       </el-card>
     </div>
   </div>
@@ -69,8 +67,8 @@ import { authApi } from '@/api'
 
 const router = useRouter()
 const store = useUserStore()
-const username = ref('tester')
-const password = ref('123456')
+const username = ref('')
+const password = ref('')
 const loading = ref(false)
 const oauthing = ref('')
 
@@ -193,8 +191,6 @@ async function doLogin() {
 .oauth-row { display: flex; gap: 12px; }
 .oauth-btn { flex: 1; border-radius: var(--r-md); }
 .or { font-size: 12px; color: var(--c-text-sub); }
-
-.tip { margin: 18px 0 0; font-size: 12px; color: var(--c-text-sub); text-align: center; }
 
 /* 窄屏：隐藏品牌区，仅保留表单 */
 @media (max-width: 860px) {
