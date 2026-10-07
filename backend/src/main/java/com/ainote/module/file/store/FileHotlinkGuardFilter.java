@@ -54,6 +54,11 @@ public class FileHotlinkGuardFilter extends OncePerRequestFilter {
         }
         try {
             String host = new java.net.URI(source).getHost();
+            // 同主机来源（Referer/Origin 的 host 与请求 Host 一致）放行，
+            // 避免部署在任意 IP/域名下时需要额外配置
+            if (host != null && host.equalsIgnoreCase(request.getServerName())) {
+                return true;
+            }
             for (String allowed : allowedOrigins.split(",")) {
                 String a = allowed.trim();
                 if (!a.isEmpty() && host != null && host.equals(new java.net.URI(a).getHost())) {
