@@ -31,11 +31,11 @@
       <el-card class="login-card" shadow="never">
         <div class="brand">
           <div class="brand-logo"><el-icon :size="24"><Notebook /></el-icon></div>
-          <h1 class="brand-name">欢迎回来</h1>
-          <p class="brand-sub">登录 MindNest，继续你的创作</p>
+          <h1 class="brand-name">{{ mode === 'login' ? '欢迎回来' : '创建账号' }}</h1>
+          <p class="brand-sub">{{ mode === 'login' ? '登录 MindNest，继续你的创作' : '注册 MindNest，开启你的知识之旅' }}</p>
         </div>
 
-        <el-form label-position="top" @submit.prevent>
+        <el-form v-if="mode === 'login'" label-position="top" @submit.prevent>
           <el-form-item label="用户名">
             <el-input v-model="username" size="large" placeholder="请输入用户名" clearable />
           </el-form-item>
@@ -47,6 +47,35 @@
             登 录
           </el-button>
         </el-form>
+
+        <el-form v-else label-position="top" @submit.prevent>
+          <el-form-item label="用户名">
+            <el-input v-model="regForm.username" size="large" placeholder="3-32 位字母、数字、下划线" clearable />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="regForm.password" size="large" type="password" placeholder="6-32 位密码"
+                      show-password />
+          </el-form-item>
+          <el-form-item label="确认密码">
+            <el-input v-model="regForm.confirm" size="large" type="password" placeholder="请再次输入密码"
+                      show-password @keyup.enter="doRegister" />
+          </el-form-item>
+          <el-form-item label="昵称（可选）">
+            <el-input v-model="regForm.nickname" size="large" placeholder="不填则默认使用用户名" maxlength="64" clearable />
+          </el-form-item>
+          <el-button class="submit" type="primary" size="large" :loading="regLoading" @click="doRegister">
+            注 册
+          </el-button>
+        </el-form>
+
+        <div class="switch-mode">
+          <template v-if="mode === 'login'">
+            还没有账号？<el-link type="primary" :underline="false" @click="switchMode('register')">立即注册</el-link>
+          </template>
+          <template v-else>
+            已有账号？<el-link type="primary" :underline="false" @click="switchMode('login')">返回登录</el-link>
+          </template>
+        </div>
 
         <el-divider><span class="or">其他方式登录</span></el-divider>
         <div class="oauth-row">
@@ -71,6 +100,51 @@ const username = ref('')
 const password = ref('')
 const loading = ref(false)
 const oauthing = ref('')
+
+const mode = ref('login')
+const regLoading = ref(false)
+const regForm = ref({ username: '', password: '', confirm: '', nickname: '' })
+
+function switchMode(m) {
+  mode.value = m
+}
+
+async function doRegister() {
+  const f = regForm.value
+  if (!f.username || !f.password) {
+    window.$message?.warning('请输入用户名和密码')
+    return
+  }
+  if (!/^[a-zA-Z0-9_]{3,32}$/.test(f.username)) {
+    window.$message?.warning('用户名需为 3-32 位字母、数字、下划线')
+    return
+  }
+  if (f.password.length < 6 || f.password.length > 32) {
+    window.$message?.warning('密码长度需在 6-32 位之间')
+    return
+  }
+  if (f.password !== f.confirm) {
+    window.$message?.warning('两次输入的密码不一致')
+    return
+  }
+  regLoading.value = true
+  try {
+    await authApi.register({
+      username: f.username,
+      password: f.password,
+      nickname: f.nickname || undefined
+    })
+    window.$message?.success('注册成功，请登录')
+    // 回填用户名并切回登录
+    username.value = f.username
+    password.value = ''
+    mode.value = 'login'
+  } catch (e) {
+    window.$message?.error(e.message || '注册失败')
+  } finally {
+    regLoading.value = false
+  }
+}
 
 async function oauthStart(source) {
   if (oauthing.value) return
@@ -191,6 +265,14 @@ async function doLogin() {
 .oauth-row { display: flex; gap: 12px; }
 .oauth-btn { flex: 1; border-radius: var(--r-md); }
 .or { font-size: 12px; color: var(--c-text-sub); }
+
+.switch-mode {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--c-text-sub);
+}
+.switch-mode .el-link { font-size: 13px; vertical-align: baseline; }
 
 /* 窄屏：隐藏品牌区，仅保留表单 */
 @media (max-width: 860px) {

@@ -6,13 +6,14 @@
 
 ## 特性一览
 
-- 🔐 用户体系：注册 / 登录 / JWT 认证 / 个人中心（资料、密码）
+- 🔐 用户体系：登录页自助注册（前后端双重校验 + IP 限流防刷）/ 登录 / JWT 认证 / 个人中心（资料、密码、头像）
 - 📚 知识库：增删改查、公开/私有切换、无登录公开分享页
 - 📝 笔记：富文本编辑（WangEditor）、分类、标签、回收站、关键词搜索、浏览计数
 - 🤖 AI 能力：大纲生成、内容润色、摘要生成、基于笔记问答（OpenAI 兼容接口，mock 兜底）
+- 💬 AI 多轮对话：Redis 存储对话历史，上下文按笔记隔离，支持查看 / 清空记忆
 - � AI 异步任务：RabbitMQ 解耦异步生成（生产者入队 → 消费者处理 → 前端轮询），含手动 ACK / 重试 / 幂等 / 死信队列
-- 🧯 接口限流：Redis 令牌桶（自研注解 + AOP），公开分享 / 文件上传 / AI 调用按 IP 限流防滥用
-- �️ 文件：上传（本地磁盘 / MinIO）、绑定笔记、详情回显、防盗链
+- 🧯 接口限流：Redis 令牌桶（自研注解 + AOP），公开分享 / 文件上传 / AI 调用 / 注册按 IP 限流防滥用
+- �️ 文件：上传（本地磁盘 / MinIO）、绑定笔记、详情回显、防盗链（Referer 校验，同主机自动放行）
 - 📊 运营：操作日志（AOP）、数据统计面板
 - 📤 导出：笔记导出 Markdown / PDF
 
@@ -122,6 +123,7 @@ docker compose up -d --build
 | 标签 | `GET/POST/DELETE /api/tag/*` |
 | 笔记 | `GET/POST/PUT /api/note/*` `DELETE /api/note/delete/{id}` `PUT /api/note/restore/{id}` `GET /api/note/recycle` |
 | AI | `POST /api/ai/generate-outline` `POST /api/ai/polish` `POST /api/ai/summarize` `POST /api/ai/chat` |
+| AI 对话记忆 | `GET /api/ai/chat/history?noteId=`（历史，按笔记隔离） `DELETE /api/ai/chat/history?noteId=`（清空） |
 | AI 异步 | `POST /api/ai/async`（MQ 入队，返回 taskId） `GET /api/ai/task/{taskId}`（轮询状态/结果） |
 | 文件 | `POST /api/file/upload` `GET /api/file/list` `DELETE /api/file/delete/{id}` `GET /api/files/**`* |
 | 导出 | `GET /api/export/markdown/{noteId}` |
@@ -158,6 +160,14 @@ RabbitMQ ──► 消费者：手动ACK + 调AI + 写回 ai_task.result
 - **可配置**：`@RateLimit(key, capacity, refillPerSecond, message)` 挂在对应 Controller 方法上即可。
 
 关键代码：`common/ratelimit/RateLimit`（注解）、`RateLimitAspect`（切面）、`RateLimitService`（Redis 令牌桶）。
+
+### 5.3 AI 多轮对话记忆（Redis）
+AI 问答升级为**多轮对话**：每轮 chat 先从 Redis 读取该用户的历史上下文一并提交给大模型，成功后把本轮问答写回，让 AI「记得」之前聊过什么。
+- **按笔记隔离**：记忆 key 携带 `userId + noteId`，不同笔记各自的对话互不串扰；未关联笔记的对话进独立草稿桶。
+- **可管理**：`GET /DELETE /api/ai/chat/history` 支持查看与一键清空记忆。
+- **自动过期**：Redis key 设 TTL，长期不用的对话自动回收，不占存储。
+
+关键代码：`module/ai/service/AiChatMemoryService`、`module/ai/service/AiService`（chat 分支）、`module/ai/vo/ChatMessageVO`。
 
 ## 开发规范
 见 [backend/DEVELOPMENT.md](backend/DEVELOPMENT.md)：统一返回、全局异常、RESTful 路径、JWT 鉴权、逻辑删除、命名与提交规范。

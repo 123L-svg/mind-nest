@@ -1,5 +1,6 @@
 package com.ainote.module.user.controller;
 
+import com.ainote.common.ratelimit.RateLimit;
 import com.ainote.common.result.Result;
 import com.ainote.module.user.dto.LoginDTO;
 import com.ainote.module.user.dto.RegisterDTO;
@@ -28,6 +29,7 @@ public class AuthController {
 
     @Operation(summary = "用户注册")
     @PostMapping("/register")
+    @RateLimit(key = "register", capacity = 3, refillPerSecond = 1, message = "注册过于频繁，请稍后再试")
     public Result<Void> register(@Valid @RequestBody RegisterDTO dto) {
         authService.register(dto);
         return Result.success("注册成功", null);
