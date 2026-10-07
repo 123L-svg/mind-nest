@@ -14,7 +14,7 @@
 
     <el-main class="body">
       <el-row :gutter="16">
-        <el-col :xs="24" :md="18">
+        <el-col :xs="24" :lg="18">
           <el-card class="main-card">
             <el-form label-position="top">
               <el-form-item label="笔记标题">
@@ -46,7 +46,7 @@
           </el-card>
         </el-col>
 
-        <el-col :xs="24" :md="6">
+        <el-col :xs="24" :lg="6">
           <el-card class="side">
             <template #header><b>AI 助手</b></template>
             <el-tag v-if="ai.mock" type="warning" size="small" style="margin-bottom:12px">演示模式（mock）</el-tag>
@@ -434,8 +434,17 @@ onMounted(async () => {
 .editor-toolbar { border-bottom: 1px solid var(--c-border); }
 .editor-body { min-height: 380px; }
 .editor-body :deep(.w-e-text-container) { min-height: 380px; }
-.side { position: sticky; top: 12px; }
-.ai-btns { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+/* AI 面板仅大屏（lg+）吸顶；中窄屏堆叠为全宽，避免被挤压 */
+@media (min-width: 1200px) {
+  .side { position: sticky; top: 12px; }
+}
+/* 面板窄时按钮单列，堆叠全宽时自动一行三列 */
+.ai-btns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
 .ai-result { margin-top: 12px; background: var(--c-surface-sub); border-radius: var(--r-md); padding: 10px; max-height: 40vh; overflow: auto; }
 .ai-result pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; }
 .ai-async { display: flex; flex-direction: column; gap: 10px; }
