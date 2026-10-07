@@ -170,6 +170,7 @@ CREATE TABLE IF NOT EXISTS `note_version` (
 CREATE TABLE IF NOT EXISTS `ai_task` (
     `id`          BIGINT       NOT NULL COMMENT '任务ID（雪花，对外即 taskId）',
     `user_id`     BIGINT       NOT NULL COMMENT '发起用户ID',
+    `note_id`     BIGINT       DEFAULT NULL COMMENT '笔记ID（chat 多轮记忆按笔记隔离；可为空）',
     `action`      VARCHAR(32)  NOT NULL COMMENT '动作：outline/polish/summarize/chat',
     `title`       VARCHAR(128) DEFAULT NULL COMMENT '笔记标题',
     `content`     LONGTEXT     COMMENT '笔记内容',
@@ -193,3 +194,7 @@ ALTER TABLE `sys_user`
     ADD COLUMN `oauth_type` VARCHAR(16) DEFAULT NULL COMMENT '第三方来源：github/gitee 等，空表示账号密码用户' AFTER `email`,
     ADD COLUMN `open_id` VARCHAR(64) DEFAULT NULL COMMENT '第三方平台唯一标识' AFTER `oauth_type`,
     ADD UNIQUE KEY `uk_oauth` (`oauth_type`, `open_id`);
+
+-- 已有库升级（AI 对话记忆按笔记隔离）：对非全新初始化重复执行报列已存在，可忽略
+ALTER TABLE `ai_task`
+    ADD COLUMN `note_id` BIGINT DEFAULT NULL COMMENT '笔记ID（chat 多轮记忆按笔记隔离；可为空）' AFTER `user_id`;

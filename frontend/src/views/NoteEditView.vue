@@ -51,6 +51,8 @@
                 <span class="side-dot" aria-hidden="true"></span>
                 <b>AI 助手</b>
                 <el-tag v-if="ai.mock" type="warning" size="small">演示模式</el-tag>
+                <el-button v-if="chatMsgs.length" link size="small" class="chat-clear"
+                           @click="clearChat">清空</el-button>
               </div>
             </template>
 
@@ -69,7 +71,7 @@
             <div v-else class="chat-empty">
               <div class="chat-empty-icon"><el-icon :size="20"><ChatDotRound /></el-icon></div>
               <p>我是你的 AI 写作助手</p>
-              <p class="sub">基于当前笔记内容提问，或点击下方快捷功能</p>
+              <p class="sub">像我一样直接对话，或点击下方快捷功能处理笔记</p>
             </div>
 
             <!-- 异步任务（MQ）折叠区 -->
@@ -116,10 +118,10 @@
             <!-- 输入区 -->
             <div class="chat-input">
               <el-input v-model="chatQuestion" type="textarea" :rows="2" resize="none"
-                        placeholder="基于内容提问，Enter 发送，Shift+Enter 换行"
+                        placeholder="随便聊点什么，Enter 发送，Shift+Enter 换行"
                         @keydown.enter.exact.prevent="askChat" />
               <el-button type="primary" class="chat-send" :icon="Promotion"
-                         :loading="aiBusy" :disabled="!form.content" @click="askChat" />
+                         :loading="aiBusy" :disabled="!chatQuestion" @click="askChat" />
             </div>
           </el-card>
         </el-col>
@@ -154,6 +156,7 @@ import { ref, shallowRef, computed, onMounted, onBeforeUnmount, nextTick } from 
 import { useRoute, useRouter } from 'vue-router'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import { List, MagicStick, Document, ArrowLeft, ChatDotRound, Promotion } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { kbApi, categoryApi, noteApi, aiApi, fileApi, exportApi } from '@/api'
 import '@wangeditor/editor/dist/css/style.css'
 
@@ -325,6 +328,31 @@ const chatMsgs = ref([])          // {role:'user'|'ai', text, action, pending, e
 const chatListRef = ref(null)
 const ACTION_LABELS = { outline: '生成大纲', polish: '润色内容', summarize: '生成摘要', chat: '内容问答' }
 
+// ============ 对话记忆（Redis 多轮，按笔记隔离） ============
+async function loadChatHistory() {
+  try {
+    const { data } = await aiApi.chatHistory(form.value.id)
+    chatMsgs.value = (data || []).map(m => ({
+      role: m.role === 'assistant' ? 'ai' : 'user',
+      text: m.content
+    }))
+    if (chatMsgs.value.length) nextTick(scrollChatToBottom)
+  } catch { /* 历史加载失败不阻塞编辑 */ }
+}
+
+async function clearChat() {
+  try {
+    await ElMessageBox.confirm('确定清空当前笔记的对话记录吗？', '清空对话', {
+      confirmButtonText: '清空',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch { return }  // 用户取消
+  await aiApi.clearChatHistory(form.value.id)
+  chatMsgs.value = []
+  ElMessage.success('对话已清空')
+}
+
 function scrollChatToBottom() {
   nextTick(() => { chatListRef.value?.scrollTo({ top: chatListRef.value.scrollHeight }) })
 }
@@ -343,6 +371,7 @@ async function submitAiAsync(action) {
   try {
     const res = await aiApi.asyncSubmit({
       action,
+      noteId: form.value.id,
       title: form.value.title,
       content: plainText(),
       question
@@ -470,6 +499,7 @@ onMounted(async () => {
   await loadKbs()
   if (route.query.kbId) { form.value.kbId = route.query.kbId; await loadCategories() }
   if (isEdit.value) await loadNote()
+  loadChatHistory()
 })
 </script>
 
@@ -577,6 +607,7 @@ onMounted(async () => {
 }
 .side-header { display: flex; align-items: center; gap: 8px; }
 .side-header b { font-size: 15px; }
+.chat-clear { margin-left: auto; }
 .side-dot {
   width: 8px;
   height: 8px;

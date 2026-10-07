@@ -9,21 +9,26 @@ import com.ainote.module.ai.config.AiProperties;
 import com.ainote.module.ai.dto.AiAsyncRequestDTO;
 import com.ainote.module.ai.dto.AiRequestDTO;
 import com.ainote.module.ai.entity.AiTask;
+import com.ainote.module.ai.service.AiChatMemoryService;
 import com.ainote.module.ai.service.AiService;
 import com.ainote.module.ai.service.AiTaskService;
 import com.ainote.module.ai.vo.AiResultVO;
 import com.ainote.module.ai.vo.AiTaskVO;
+import com.ainote.module.ai.vo.ChatMessageVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -38,6 +43,7 @@ public class AiController {
     private final AiService aiService;
     private final AiProperties aiProperties;
     private final AiTaskService aiTaskService;
+    private final AiChatMemoryService chatMemory;
 
     /** 允许的异步任务 action */
     private static final Set<String> ALLOWED_ACTIONS =
@@ -71,8 +77,25 @@ public class AiController {
         return Result.success(doExecute(dto, AiService.CHAT));
     }
 
+    @Operation(summary = "AI 对话历史（Redis 多轮记忆，按笔记隔离）")
+    @GetMapping("/chat/history")
+    public Result<List<ChatMessageVO>> chatHistory(
+            @RequestParam(value = "noteId", required = false) Long noteId) {
+        return Result.success(chatMemory.getHistory(SecurityUtil.getUserId(), noteId));
+    }
+
+    @Operation(summary = "清空 AI 对话记忆（按笔记隔离）")
+    @DeleteMapping("/chat/history")
+    public Result<Void> clearChatHistory(
+            @RequestParam(value = "noteId", required = false) Long noteId) {
+        chatMemory.clear(SecurityUtil.getUserId(), noteId);
+        return Result.success(null);
+    }
+
     private AiResultVO doExecute(AiRequestDTO dto, String action) {
         String text = aiService.execute(
+                SecurityUtil.getUserId(),
+                dto.getNoteId(),
                 action,
                 dto.getTitle(),
                 dto.getContent(),
@@ -98,6 +121,7 @@ public class AiController {
         }
         AiTask task = new AiTask();
         task.setUserId(SecurityUtil.getUserId());
+        task.setNoteId(dto.getNoteId());
         task.setAction(action);
         task.setTitle(dto.getTitle());
         task.setContent(dto.getContent());

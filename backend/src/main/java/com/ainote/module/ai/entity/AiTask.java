@@ -27,6 +27,9 @@ public class AiTask {
 
     private Long userId;
 
+    /** 笔记ID（chat 多轮记忆按笔记隔离；可为空） */
+    private Long noteId;
+
     /** 动作：outline / polish / summarize / chat */
     private String action;
 

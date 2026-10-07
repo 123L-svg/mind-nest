@@ -8,6 +8,9 @@ import lombok.Data;
 @Data
 public class AiRequestDTO {
 
+    /** 笔记ID（chat 多轮记忆按笔记隔离；新建未保存时为空） */
+    private Long noteId;
+
     /** 笔记标题（大纲生成用） */
     private String title;
 

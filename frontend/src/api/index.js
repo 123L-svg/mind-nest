@@ -73,7 +73,11 @@ export const aiApi = {
   /** 异步任务（MQ 解耦）：提交入队 → data: {taskId} */
   asyncSubmit: (data) => http.post('/ai/async', data),
   /** 查询异步任务状态（轮询）：data: {taskId,status,statusText,result,errorMsg} */
-  asyncTask: (taskId) => http.get(`/ai/task/${taskId}`)
+  asyncTask: (taskId) => http.get(`/ai/task/${taskId}`),
+  /** 对话历史（Redis 多轮记忆，按笔记隔离）→ data: [{role:'user'|'assistant', content}] */
+  chatHistory: (noteId) => http.get('/ai/chat/history', { params: { noteId } }),
+  /** 清空对话记忆（按笔记隔离） */
+  clearChatHistory: (noteId) => http.delete('/ai/chat/history', { params: { noteId } })
 }
 
 // 文件

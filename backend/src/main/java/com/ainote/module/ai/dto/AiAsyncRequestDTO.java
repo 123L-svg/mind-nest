@@ -13,6 +13,9 @@ public class AiAsyncRequestDTO {
     @NotBlank(message = "action 不能为空")
     private String action;
 
+    /** 笔记ID（chat 多轮记忆按笔记隔离；新建未保存时为空） */
+    private Long noteId;
+
     /** 笔记标题（大纲生成用） */
     private String title;
 

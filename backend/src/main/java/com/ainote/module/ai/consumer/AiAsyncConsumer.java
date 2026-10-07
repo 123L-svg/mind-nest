@@ -57,7 +57,8 @@ public class AiAsyncConsumer {
         }
         try {
             String result = aiService.execute(
-                    task.getAction(), task.getTitle(), task.getContent(), task.getQuestion());
+                    task.getUserId(), task.getNoteId(), task.getAction(),
+                    task.getTitle(), task.getContent(), task.getQuestion());
             finish(task.getId(), AiTask.STATUS_SUCCESS, result, null, task.getRetryCount());
             ack(channel, deliveryTag);
         } catch (Throwable e) {
