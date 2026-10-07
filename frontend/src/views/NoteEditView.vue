@@ -1,35 +1,33 @@
 <template>
-  <div class="editor-page page-shell">
-    <PageHeader :title="isEdit ? '编辑笔记' : '新建笔记'"
-                subtitle="富文本编辑 · 自动保存 · AI 辅助创作">
-      <el-tag v-if="autoSaveHint" size="small" type="info" effect="plain" class="autosave-tag">
-        {{ autoSaveHint }}
-      </el-tag>
+  <div class="editor-page">
+    <el-header class="bar">
+      <el-button @click="back">返回</el-button>
+      <div class="edit-title">{{ isEdit ? '编辑笔记' : '新建笔记' }}</div>
       <template v-if="isEdit">
-        <el-button size="small" @click="exportMarkdown">导出 MD</el-button>
-        <el-button size="small" @click="exportPdf">导出 PDF</el-button>
-        <el-button size="small" @click="openVersions">历史版本</el-button>
+        <el-button @click="exportMarkdown">导出 MD</el-button>
+        <el-button @click="exportPdf">导出 PDF</el-button>
+        <el-button @click="openVersions">历史</el-button>
       </template>
-      <el-button type="primary" size="small" :loading="saving" @click="save">保存</el-button>
-    </PageHeader>
+      <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      <el-tag v-if="autoSaveHint" size="small" type="info">{{ autoSaveHint }}</el-tag>
+    </el-header>
 
-    <main class="page-container">
+    <el-main class="body">
       <el-row :gutter="16">
-        <el-col :xs="24" :lg="17">
+        <el-col :xs="24" :md="18">
           <el-card class="main-card">
             <el-form label-position="top">
               <el-form-item label="笔记标题">
-                <el-input v-model="form.title" placeholder="给笔记起个标题…" clearable
-                          class="title-input" />
+                <el-input v-model="form.title" placeholder="笔记标题" clearable />
               </el-form-item>
               <el-form-item>
                 <div class="meta">
-                  <el-select v-model="form.kbId" placeholder="选择知识库" class="meta-select"
+                  <el-select v-model="form.kbId" placeholder="选择知识库" style="width:200px"
                              @change="loadCategories">
                     <el-option v-for="kb in kbs" :key="kb.id" :label="kb.name" :value="kb.id" />
                   </el-select>
                   <el-select v-model="form.categoryId" placeholder="选择分类（可选）" clearable
-                             class="meta-select">
+                             style="width:200px">
                     <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
                   </el-select>
                 </div>
@@ -42,92 +40,58 @@
                 </div>
               </el-form-item>
               <el-form-item label="摘要">
-                <el-input v-model="form.summary" placeholder="笔记摘要（可选，AI 生成摘要后自动填入）" clearable />
+                <el-input v-model="form.summary" placeholder="笔记摘要（可选）" clearable />
               </el-form-item>
             </el-form>
           </el-card>
         </el-col>
 
-        <el-col :xs="24" :lg="7">
+        <el-col :xs="24" :md="6">
           <el-card class="side">
-            <template #header>
-              <div class="side-head">
-                <span class="side-title"><el-icon><MagicStick /></el-icon>AI 助手</span>
-                <el-tag v-if="ai.mock" type="warning" size="small">演示模式</el-tag>
+            <template #header><b>AI 助手</b></template>
+            <el-tag v-if="ai.mock" type="warning" size="small" style="margin-bottom:12px">演示模式（mock）</el-tag>
+            <div class="ai-btns">
+              <el-button style="width:100%" :loading="aiBusy" @click="genOutline">✍ 生成大纲</el-button>
+              <el-button style="width:100%" :loading="aiBusy" :disabled="!form.content" @click="polish">✨ 润色内容</el-button>
+              <el-button style="width:100%" :loading="aiBusy" :disabled="!form.content" @click="summarize">📋 生成摘要</el-button>
+            </div>
+            <el-input v-if="!aiBusy" v-model="chatQuestion" placeholder="基于内容提问，回车发送"
+                      clearable @keyup.enter="askChat" :disabled="!form.content" />
+            <el-alert v-if="aiBusy" title="AI 处理中..." type="info" :closable="false" style="margin-top:10px" />
+            <div v-if="ai.result && !aiBusy" class="ai-result">
+              <pre>{{ ai.result }}</pre>
+              <el-button v-if="ai.action === 'outline'" type="primary" size="small"
+                         class="insert-btn" @click="insertOutline">插入正文</el-button>
+            </div>
+
+            <el-divider />
+            <b>异步任务（MQ）</b>
+            <el-tag type="info" size="small" style="margin:6px 0 10px">入队后由消费者异步生成，前端轮询结果</el-tag>
+            <div class="ai-async">
+              <el-select v-model="asyncForm.action" style="width:100%" placeholder="选择动作">
+                <el-option label="生成大纲" value="outline" />
+                <el-option label="润色内容" value="polish" />
+                <el-option label="生成摘要" value="summarize" />
+                <el-option label="内容问答" value="chat" />
+              </el-select>
+              <el-button type="primary" style="width:100%" :loading="asyncBusy"
+                         :disabled="asyncForm.action !== 'chat' && !form.content" @click="submitAsync">
+                提交异步任务
+              </el-button>
+              <div v-if="asyncTask.status != null" class="async-state">
+                <span>状态：</span>
+                <el-tag :type="asyncStatusTag(asyncTask.status)">{{ asyncTask.statusText }}</el-tag>
               </div>
-            </template>
-
-            <el-tabs v-model="aiTab" class="side-tabs">
-              <!-- 快捷工具：三个常用 AI 动作 + 内容问答（均走异步 MQ + 轮询） -->
-              <el-tab-pane name="quick">
-                <template #label>
-                  <span class="tab-label"><el-icon><Lightning /></el-icon>快捷工具</span>
-                </template>
-                <div class="ai-btns">
-                  <el-button class="ai-quick" :loading="aiBusy" @click="genOutline">
-                    <el-icon v-show="!aiBusy"><EditPen /></el-icon><span>生成大纲</span>
-                  </el-button>
-                  <el-button class="ai-quick" :loading="aiBusy" :disabled="!form.content" @click="polish">
-                    <el-icon v-show="!aiBusy"><MagicStick /></el-icon><span>润色内容</span>
-                  </el-button>
-                  <el-button class="ai-quick" :loading="aiBusy" :disabled="!form.content" @click="summarize">
-                    <el-icon v-show="!aiBusy"><Tickets /></el-icon><span>生成摘要</span>
-                  </el-button>
-                </div>
-                <div class="chat-row">
-                  <el-input v-model="chatQuestion" placeholder="基于内容提问，回车发送"
-                            clearable @keyup.enter="askChat" :disabled="!form.content" />
-                  <el-button class="chat-send" :icon="Promotion" type="primary" :loading="aiBusy"
-                             :disabled="!form.content || !chatQuestion" @click="askChat" />
-                </div>
-                <el-alert v-if="aiBusy" title="AI 处理中，请稍候…" type="info" :closable="false"
-                          class="ai-busy-alert" />
-                <div v-if="ai.result && !aiBusy" class="ai-result">
-                  <pre>{{ ai.result }}</pre>
-                  <el-button v-if="ai.action === 'outline'" type="primary" size="small"
-                             class="insert-btn" @click="insertOutline">插入正文</el-button>
-                </div>
-              </el-tab-pane>
-
-              <!-- 任务中心：显式选择动作提交异步任务，查看状态与结果 -->
-              <el-tab-pane name="task">
-                <template #label>
-                  <span class="tab-label"><el-icon><List /></el-icon>任务中心</span>
-                </template>
-                <p class="mq-hint">任务入队后由消费者异步生成，前端轮询返回结果。</p>
-                <div class="ai-async">
-                  <el-select v-model="asyncForm.action" class="async-select" placeholder="选择动作">
-                    <el-option label="生成大纲" value="outline" />
-                    <el-option label="润色内容" value="polish" />
-                    <el-option label="生成摘要" value="summarize" />
-                    <el-option label="内容问答" value="chat" />
-                  </el-select>
-                  <el-input v-if="asyncForm.action === 'chat'" v-model="asyncQuestion"
-                            class="async-question" placeholder="请输入要提问的问题" clearable />
-                  <el-button type="primary" class="async-submit" :loading="asyncBusy"
-                             :disabled="(asyncForm.action !== 'chat' && !form.content)
-                                        || (asyncForm.action === 'chat' && !asyncQuestion)"
-                             @click="submitAsync">
-                    提交异步任务
-                  </el-button>
-                  <div v-if="asyncTask.status != null" class="async-state">
-                    <span class="muted">状态：</span>
-                    <el-tag :type="asyncStatusTag(asyncTask.status)" size="small">
-                      {{ asyncTask.statusText }}
-                    </el-tag>
-                  </div>
-                  <el-alert v-if="asyncTask.errorMsg" type="error" :closable="false"
-                            :title="asyncTask.errorMsg" class="async-error" />
-                  <div v-if="asyncTask.result" class="ai-result">
-                    <pre>{{ asyncTask.result }}</pre>
-                  </div>
-                </div>
-              </el-tab-pane>
-            </el-tabs>
+              <el-alert v-if="asyncTask.errorMsg" type="error" :closable="false"
+                        :title="asyncTask.errorMsg" style="margin-top:8px" />
+              <div v-if="asyncTask.result" class="ai-result">
+                <pre>{{ asyncTask.result }}</pre>
+              </div>
+            </div>
           </el-card>
         </el-col>
       </el-row>
-    </main>
+    </el-main>
 
     <!-- 历史版本弹窗 -->
     <el-dialog v-model="verDialog.show" title="历史版本" width="760px" top="6vh">
@@ -156,15 +120,8 @@
 import { ref, shallowRef, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
-import {
-  EditPen, MagicStick, Tickets, Promotion, List, Lightning
-} from '@element-plus/icons-vue'
-import PageHeader from '@/components/PageHeader.vue'
 import { kbApi, categoryApi, noteApi, aiApi, fileApi, exportApi } from '@/api'
 import '@wangeditor/editor/dist/css/style.css'
-
-// AI 面板当前 Tab：quick 快捷工具 / task 任务中心
-const aiTab = ref('quick')
 
 const route = useRoute()
 const router = useRouter()
@@ -269,6 +226,7 @@ async function loadNote() {
   html.value = form.value.content || '<p><br></p>'
   lastSaved = form.value.content
 }
+function back() { router.push('/dashboard') }
 
 async function save() {
   if (!form.value.title) return window.$message?.warning('标题不能为空')
@@ -395,7 +353,6 @@ function askChat() { submitAiAsync('chat') }
 
 // ============ 异步任务（MQ 解耦 + 轮询） ============
 const asyncForm = ref({ action: 'outline' })
-const asyncQuestion = ref('')
 const asyncTask = ref({})           // {taskId,status,statusText,result,errorMsg}
 const asyncBusy = ref(false)
 const TERMINAL = [2, 3]
@@ -430,7 +387,7 @@ function asyncPayload() {
     action: asyncForm.value.action,
     title: form.value.title,
     content: plainText(),
-    question: asyncForm.value.action === 'chat' ? asyncQuestion.value : null
+    question: chatQuestion.value || (asyncForm.value.action === 'chat' ? '' : null)
   }
 }
 
@@ -468,88 +425,20 @@ onMounted(async () => {
 
 <style scoped>
 .editor-page { min-height: 100vh; }
-
-/* 主卡片 */
+.bar { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--c-border); background: var(--c-surface); }
+.edit-title { flex: 1; font-weight: 600; }
+.body { background: var(--c-bg); }
 .main-card { margin-bottom: 16px; }
-.title-input :deep(.el-input__inner) { font-size: 16px; font-weight: 500; }
 .meta { display: flex; gap: 12px; width: 100%; }
-.meta-select { flex: 1; max-width: 220px; }
-
-/* 富文本编辑器：高度随视口自适应，避免大块空白或过矮 */
-.editor-box {
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-md);
-  overflow: hidden; width: 100%;
-}
-.editor-toolbar { border-bottom: 1px solid var(--c-border); background: var(--c-surface-sub); }
-.editor-body { min-height: clamp(320px, 46vh, 560px); }
-.editor-body :deep(.w-e-text-container) { min-height: clamp(320px, 46vh, 560px); }
-
-/* 右侧 AI 面板：仅大屏（lg+）吸顶跟随；中窄屏堆叠在全宽下 */
-.side :deep(.el-card__body) { padding: 16px 20px 20px; }
-@media (min-width: 1200px) {
-  .side {
-    position: sticky;
-    top: calc(var(--header-h) + 12px);
-  }
-}
-.side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.side-title {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-family: var(--font-display);
-  font-size: 15px; font-weight: 600;
-}
-.side-title .el-icon { color: var(--c-primary); }
-
-/* Tab 标签带图标 */
-.side-tabs :deep(.el-tabs__header) { margin-bottom: 14px; }
-.tab-label {
-  display: inline-flex; align-items: center; gap: 5px;
-}
-.tab-label .el-icon { font-size: 14px; }
-
-/* 快捷工具按钮：面板窄时单列竖排，面板宽（堆叠全宽）时自动一行三列；
-   图标/文字间距交给 EP 内置规则（el-icon + span），loading 时文字位置不跳动 */
-.ai-btns {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.ai-quick {
-  width: 100%;
-  justify-content: flex-start;
-}
-
-/* 问答行：输入框自适应、发送按钮固定不被压缩 */
-.chat-row { display: flex; gap: 8px; }
-.chat-row :deep(.el-input) { flex: 1; min-width: 0; }
-.chat-send { flex-shrink: 0; width: 40px; }
-.ai-busy-alert { margin-top: 12px; }
-
-/* 任务中心 */
-.mq-hint { margin: 0 0 12px; font-size: 12px; line-height: 1.6; color: var(--c-text-sub); }
+.editor-box { border: 1px solid var(--c-border); border-radius: var(--r-md); overflow: hidden; width: 100%; }
+.editor-toolbar { border-bottom: 1px solid var(--c-border); }
+.editor-body { min-height: 380px; }
+.editor-body :deep(.w-e-text-container) { min-height: 380px; }
+.side { position: sticky; top: 12px; }
+.ai-btns { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.ai-result { margin-top: 12px; background: var(--c-surface-sub); border-radius: var(--r-md); padding: 10px; max-height: 40vh; overflow: auto; }
+.ai-result pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; }
 .ai-async { display: flex; flex-direction: column; gap: 10px; }
-.async-select { width: 100%; }
-.async-question { width: 100%; }
-.async-submit { width: 100%; }
 .async-state { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.async-error { margin-top: 2px; }
-
-/* AI 结果框 */
-.ai-result {
-  margin-top: 12px;
-  background: var(--c-surface-sub);
-  border: 1px solid var(--c-divider);
-  border-radius: var(--r-md);
-  padding: 10px 12px;
-  max-height: 40vh; overflow: auto;
-}
-.ai-result pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.65; }
 .insert-btn { margin-top: 10px; width: 100%; }
-
-@media (max-width: 768px) {
-  .meta { flex-direction: column; }
-  .meta-select { max-width: none; }
-}
 </style>

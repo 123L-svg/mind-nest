@@ -4,13 +4,6 @@
  * - 通过 html[data-theme="dark"] 切换暗色，供页面与组件统一引用。
  */
 :root {
-  /* 字体：展示字体用于品牌/标题/数字，正文以系统中文字体为主 */
-  --font-display: 'Sora', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
-
-  /* 版式：内容最大宽度 / 页头高度 */
-  --c-page-max: 1240px;
-  --header-h: 56px;
-
   /* 色彩语义 */
   --c-bg: #f5f7fa;            /* 页面背景 */
   --c-surface: #ffffff;       /* 卡片/内容表面 */

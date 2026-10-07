@@ -304,7 +304,6 @@ onMounted(() => { refreshInfo(); loadKbs() })
   display: flex; align-items: center; gap: 10px;
   padding: 18px 16px 14px; color: var(--c-text); font-weight: 700; font-size: 17px;
 }
-.sider-brand .brand { font-family: var(--font-display); letter-spacing: 0.3px; }
 .sider-brand :deep(.el-icon) {
   width: 34px; height: 34px;
   display: inline-flex; align-items: center; justify-content: center;
@@ -336,7 +335,6 @@ onMounted(() => { refreshInfo(); loadKbs() })
 }
 .topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .topbar-left .title {
-  font-family: var(--font-display);
   font-size: 16px; font-weight: 600; color: var(--c-text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }

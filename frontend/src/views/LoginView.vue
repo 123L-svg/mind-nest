@@ -134,13 +134,12 @@ async function doLogin() {
 .brand-pane-inner { position: relative; color: #fff; max-width: 400px; padding: 40px; }
 .pane-logo {
   display: inline-flex; align-items: center; gap: 8px;
-  font-family: var(--font-display);
   font-size: 18px; font-weight: 700;
   padding: 8px 16px; border-radius: 999px;
   background: rgba(255, 255, 255, 0.16);
   backdrop-filter: blur(4px);
 }
-.pane-title { margin: 28px 0 10px; font-family: var(--font-display); font-size: 40px; line-height: 1.25; font-weight: 700; }
+.pane-title { margin: 28px 0 10px; font-size: 40px; line-height: 1.25; font-weight: 700; }
 .pane-sub { margin: 0 0 36px; font-size: 15px; opacity: 0.9; }
 
 .pane-features { list-style: none; display: flex; flex-direction: column; gap: 20px; }
@@ -178,7 +177,7 @@ async function doLogin() {
   display: flex; align-items: center; justify-content: center;
   border-radius: 14px; background: var(--grad-brand); color: #fff;
 }
-.brand-name { margin: 0 0 6px; font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--c-text); }
+.brand-name { margin: 0 0 6px; font-size: 22px; font-weight: 700; color: var(--c-text); }
 .brand-sub { margin: 0; font-size: 13px; color: var(--c-text-sub); }
 
 .el-form-item { margin-bottom: 18px; }
