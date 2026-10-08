@@ -110,6 +110,10 @@ services:
       - backend
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      # SSL 证书只读挂载（宿主机目录需已存在 pem/key 文件）
+      - /data/nginx/cert:/etc/nginx/cert:ro
 
 volumes:
   mysql-data:
