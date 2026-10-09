@@ -35,7 +35,7 @@ public class AiTaskService {
 
         AiAsyncMessage msg = new AiAsyncMessage(
                 task.getId(), task.getUserId(), task.getAction(),
-                task.getTitle(), task.getContent(), task.getQuestion());
+                task.getTitle(), task.getContent(), task.getQuestion(), task.getParams());
         try {
             rabbitTemplate.convertAndSend(
                     mqProps.getAiTaskExchange(), mqProps.getAiTaskRoutingKey(), msg);

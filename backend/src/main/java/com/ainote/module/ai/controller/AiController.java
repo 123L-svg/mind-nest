@@ -1,5 +1,6 @@
 package com.ainote.module.ai.controller;
 
+import cn.hutool.json.JSONUtil;
 import com.ainote.common.exception.BusinessException;
 import com.ainote.common.ratelimit.RateLimit;
 import com.ainote.common.result.Result;
@@ -93,10 +94,12 @@ public class AiController {
     }
 
     private AiResultVO doExecute(AiRequestDTO dto, String action) {
+        String paramsStr = dto.getParams() != null ? JSONUtil.toJsonStr(dto.getParams()) : null;
         String text = aiService.execute(
                 SecurityUtil.getUserId(),
                 dto.getNoteId(),
                 action,
+                paramsStr,
                 dto.getTitle(),
                 dto.getContent(),
                 dto.getQuestion());
@@ -126,6 +129,7 @@ public class AiController {
         task.setTitle(dto.getTitle());
         task.setContent(dto.getContent());
         task.setQuestion(dto.getQuestion());
+        task.setParams(dto.getParams() != null ? JSONUtil.toJsonStr(dto.getParams()) : null);
         Long taskId = aiTaskService.submit(task);
         return Result.success(toVO(taskId, AiTask.STATUS_PENDING, null, null));
     }

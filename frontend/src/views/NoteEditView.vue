@@ -61,9 +61,14 @@
               <div v-for="(m, i) in chatMsgs" :key="i" class="chat-msg" :class="m.role">
                 <div class="chat-bubble" :class="{ error: m.error }">
                   <pre>{{ m.pending ? 'AI 处理中…' : m.text }}</pre>
-                  <el-button v-if="m.role === 'ai' && m.action === 'outline' && !m.pending"
+                  <!-- 大纲结果：一键插入正文 -->
+                  <el-button v-if="m.role === 'ai' && m.action === 'outline' && !m.pending && !m.error"
                              type="primary" size="small" class="insert-btn"
                              @click="insertOutline(m.text)">插入正文</el-button>
+                  <!-- 润色结果：打开 Diff 对比，逐处选择后应用 -->
+                  <el-button v-if="m.role === 'ai' && m.action === 'polish' && !m.pending && !m.error"
+                             type="success" size="small" class="insert-btn"
+                             @click="openPolishDiffFromMsg(m)">对比应用</el-button>
                 </div>
               </div>
             </div>
@@ -102,17 +107,50 @@
               </el-collapse-item>
             </el-collapse>
 
-            <!-- 快捷功能工具条 -->
+            <!-- 快捷功能工具条（下拉选参数后执行） -->
             <div class="chat-tools">
-              <button class="chat-tool" :disabled="aiBusy || !form.content" @click="genOutline">
-                <el-icon><List /></el-icon>大纲
-              </button>
-              <button class="chat-tool" :disabled="aiBusy || !form.content" @click="polish">
-                <el-icon><MagicStick /></el-icon>润色
-              </button>
-              <button class="chat-tool" :disabled="aiBusy || !form.content" @click="summarize">
-                <el-icon><Document /></el-icon>摘要
-              </button>
+              <el-dropdown trigger="click" :disabled="aiBusy || !form.content"
+                           @command="(t) => submitAiAsync('outline', { type: t })">
+                <button class="chat-tool" :disabled="aiBusy || !form.content">
+                  <el-icon><List /></el-icon>大纲
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="auto">智能生成</el-dropdown-item>
+                    <el-dropdown-item command="organize">整理已有内容</el-dropdown-item>
+                    <el-dropdown-item command="creative">基于标题创作</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-dropdown trigger="click" :disabled="aiBusy || !form.content"
+                           @command="(s) => submitAiAsync('polish', s ? { style: s } : {})">
+                <button class="chat-tool" :disabled="aiBusy || !form.content">
+                  <el-icon><MagicStick /></el-icon>润色
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="">通用润色</el-dropdown-item>
+                    <el-dropdown-item command="concise">精简凝练</el-dropdown-item>
+                    <el-dropdown-item command="formal">正式严谨</el-dropdown-item>
+                    <el-dropdown-item command="vivid">生动活泼</el-dropdown-item>
+                    <el-dropdown-item command="academic">学术化</el-dropdown-item>
+                    <el-dropdown-item command="casual">口语化</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-dropdown trigger="click" :disabled="aiBusy || !form.content"
+                           @command="(l) => submitAiAsync('summarize', { length: l })">
+                <button class="chat-tool" :disabled="aiBusy || !form.content">
+                  <el-icon><Document /></el-icon>摘要
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="short">一句话摘要</el-dropdown-item>
+                    <el-dropdown-item command="medium">一段话摘要</el-dropdown-item>
+                    <el-dropdown-item command="long">详细摘要</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
 
             <!-- 输入区 -->
@@ -148,6 +186,47 @@
         <div class="rich" v-html="verDialog.current.content || '<p>（空）</p>'"></div>
       </div>
     </el-dialog>
+
+    <!-- 润色对比（Diff）弹窗：句子级对比，点击高亮切换保留润色/原文 -->
+    <el-dialog v-model="diffDialog.show" title="润色对比" width="740px" top="8vh"
+               :close-on-click-modal="false">
+      <div class="diff-toolbar">
+        <span class="diff-legend">
+          <span class="dot dot-new"></span>采用润色
+          <span class="dot dot-old"></span>保留原文
+          <span class="diff-hint">点击高亮片段切换；共 {{ diffDialog.count }} 处修改</span>
+        </span>
+        <el-dropdown trigger="click" @command="retryPolishStyle">
+          <el-button size="small" :disabled="aiBusy">换风格重润<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="">通用润色</el-dropdown-item>
+              <el-dropdown-item command="concise">精简凝练</el-dropdown-item>
+              <el-dropdown-item command="formal">正式严谨</el-dropdown-item>
+              <el-dropdown-item command="vivid">生动活泼</el-dropdown-item>
+              <el-dropdown-item command="academic">学术化</el-dropdown-item>
+              <el-dropdown-item command="casual">口语化</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+      <div class="diff-body">
+        <template v-for="(s, i) in diffDialog.segments" :key="i">
+          <span v-if="s.type === 'same'">{{ s.text }}</span>
+          <span v-else class="diff-seg" :class="s.keepNew ? 'keep-new' : 'keep-old'"
+                title="点击切换 保留润色 / 保留原文" @click="toggleDiffSeg(i)">{{
+            s.keepNew ? (s.add || '〔已删除〕') : (s.del || '〔不采用〕')
+          }}</span>
+        </template>
+      </div>
+      <template #footer>
+        <span class="diff-scope-hint">{{
+          diffDialog.scope === 'selection' ? '将应用到选中的文字片段' : '将替换笔记全文（保存后原内容存入历史版本）'
+        }}</span>
+        <el-button @click="diffDialog.show = false">取消</el-button>
+        <el-button type="primary" @click="applyPolishDiff">应用到笔记</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -155,10 +234,76 @@
 import { ref, shallowRef, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
-import { List, MagicStick, Document, ArrowLeft, ChatDotRound, Promotion } from '@element-plus/icons-vue'
+import { Boot, SlateTransforms } from '@wangeditor/editor'
+import { List, MagicStick, Document, ArrowLeft, ArrowDown, ChatDotRound, Promotion } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { kbApi, categoryApi, noteApi, aiApi, fileApi, exportApi } from '@/api'
 import '@wangeditor/editor/dist/css/style.css'
+
+// ============ 选中润色：自定义悬浮工具栏按钮（选中文本时出现） ============
+class AiPolishMenu {
+  constructor() {
+    this.title = 'AI 润色选中文字'
+    this.tag = 'button'
+    this.iconSvg = '<svg viewBox="0 0 1024 1024" width="1em" height="1em"><path d="M512 96l58 168 168 58-168 58-58 168-58-168-168-58 168-58L512 96z" fill="currentColor"/><path d="M790 588l38 110 110 38-110 38-38 110-38-110-110-38 110-38 38-110z" fill="currentColor"/><path d="M330 784c22 0 40 14 46 36l12 42-42-12c-22-6-36-24-36-46v-20h20z" fill="currentColor"/></svg>'
+  }
+  getValue() { return '' }
+  isActive() { return false }
+  isDisabled() { return false }
+  exec() { window.dispatchEvent(new CustomEvent('ai-polish-selection')) }
+}
+try {
+  Boot.registerMenu({ key: 'aiPolishSelection', factory: () => new AiPolishMenu() })
+} catch (e) { /* HMR 重复注册忽略 */ }
+
+// ============ 句子级 Diff（LCS 对齐，用于润色对比） ============
+/** 按中英文句末标点/换行切句（保留分隔符），末尾无标点片段也算一句 */
+function splitSentences(text) {
+  if (!text) return []
+  return text.match(/[\s\S]*?[。！？!?；;\n]|[\s\S]+$/g) || []
+}
+
+/**
+ * LCS 对齐原文与润色文的句子，返回对比段列表：
+ * {type:'same', text} 未改动；{type:'change', del, add, keepNew} 可点击切换保留原文/润色
+ */
+function diffSentences(orig, polished) {
+  const a = splitSentences(orig)
+  const b = splitSentences(polished)
+  // 超长文本退化为整体一组，避免 O(n²) 性能问题
+  if (a.length > 400 || b.length > 400) {
+    return [{ type: 'change', del: orig, add: polished, keepNew: true }]
+  }
+  const n = a.length, m = b.length
+  // dp[i][j] = a[i..] 与 b[j..] 的最长公共子序列长度
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0))
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+    }
+  }
+  // 回溯得到操作序列，相邻增删合并为一个可切换的修改组
+  const segs = []
+  const pushSame = (t) => {
+    const last = segs[segs.length - 1]
+    if (last && last.type === 'same') last.text += t
+    else segs.push({ type: 'same', text: t })
+  }
+  const pushChange = (del, add) => {
+    const last = segs[segs.length - 1]
+    if (last && last.type === 'change') { last.del += del; last.add += add }
+    else segs.push({ type: 'change', del, add, keepNew: true })
+  }
+  let i = 0, j = 0
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { pushSame(a[i]); i++; j++ }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { pushChange(a[i], ''); i++ }
+    else { pushChange('', b[j]); j++ }
+  }
+  while (i < n) { pushChange(a[i], ''); i++ }
+  while (j < m) { pushChange('', b[j]); j++ }
+  return segs
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -223,6 +368,16 @@ const editorRef = shallowRef()
 const html = ref('')
 const editorConfig = {
   placeholder: '在此输入笔记内容...',
+  // 选中文本时的悬浮工具栏：首位加入自定义「AI 润色」按钮
+  hoverbarKeys: {
+    text: {
+      menuKeys: [
+        'aiPolishSelection', '|',
+        'headerSelect', 'insertLink', 'bulletedList', '|',
+        'bold', 'through', 'color', 'bgColor', 'clearStyle'
+      ]
+    }
+  },
   uploadImage: {
     maxFileSize: 10 * 1024 * 1024,
     async customUpload(file, insertFn) {
@@ -323,10 +478,96 @@ function insertOutline(text) {
   window.$message?.success('大纲已插入正文，可继续编辑后保存')
 }
 
+/** 悬浮工具栏「AI 润色」入口：润色当前选中文本（结果经 Diff 对比后回填） */
+function polishSelection() {
+  const ed = editorRef.value
+  if (!ed) return
+  if (aiBusy.value) return window.$message?.warning('AI 正在处理中，请稍候')
+  const selText = ed.getSelectionText()
+  if (!selText || !selText.trim()) return window.$message?.warning('请先选中要润色的文字')
+  const sel = ed.selection ? JSON.parse(JSON.stringify(ed.selection)) : null
+  submitAiAsync('polish', { scope: 'selection' }, { orig: selText, sel })
+}
+
+// ============ 润色对比（Diff）弹窗 ============
+const diffDialog = ref({
+  show: false, scope: 'full', orig: '', polished: '', segments: [], sel: null, snapshot: '', count: 0
+})
+
+/** 打开 Diff 弹窗：句子级对齐原文与润色文 */
+function openPolishDiff({ scope = 'full', orig = '', polished = '', sel = null, snapshot = '' }) {
+  const segments = diffSentences(orig, polished)
+  const count = segments.filter((s) => s.type === 'change').length
+  diffDialog.value = { show: true, scope, orig, polished, segments, sel, snapshot, count }
+}
+
+/** 气泡上的「对比应用」按钮入口（旧消息缺 orig 时用当前全文兜底） */
+function openPolishDiffFromMsg(m) {
+  openPolishDiff({
+    scope: m.params?.scope || 'full',
+    orig: m.orig || plainText(),
+    polished: m.text,
+    sel: m.sel || null,
+    snapshot: m.snapshot || ''
+  })
+}
+
+/** 点击修改组：切换 保留润色 / 保留原文 */
+function toggleDiffSeg(idx) {
+  const seg = diffDialog.value.segments[idx]
+  if (seg?.type === 'change') seg.keepNew = !seg.keepNew
+}
+
+/** 按当前开关状态合成最终文本 */
+function diffFinalText() {
+  return diffDialog.value.segments
+    .map((s) => (s.type === 'same' ? s.text : (s.keepNew ? s.add : s.del)))
+    .join('')
+}
+
+/** 应用对比结果到编辑器：选中片段回填原位置，全文则整体替换 */
+function applyPolishDiff() {
+  const ed = editorRef.value
+  if (!ed) return
+  const d = diffDialog.value
+  const html = markdownToHtml(diffFinalText())
+  if (d.scope === 'selection' && d.sel) {
+    let restored = false
+    try {
+      // 恢复提交润色时保存的选区，删除原选中片段后插入润色结果
+      SlateTransforms.select(ed, d.sel)
+      ed.deleteFragment()
+      restored = true
+    } catch (e) { restored = false }
+    if (!restored) window.$message?.warning('选区已失效，润色结果将插入光标处')
+    else if (d.snapshot && d.snapshot !== plainText()) {
+      window.$message?.info('应用期间笔记内容有变动，请检查插入位置')
+    }
+    ed.dangerouslyInsertHtml(html)
+    form.value.content = ed.getHtml()
+    window.$message?.success('润色结果已应用到选中文字')
+  } else {
+    ed.clear()
+    ed.dangerouslyInsertHtml(html)
+    form.value.content = ed.getHtml()
+    window.$message?.success('已替换全文，保存后原内容自动存入历史版本')
+  }
+  d.show = false
+}
+
+/** 换风格重新润色：复用同一原文与选区，重提交异步任务 */
+function retryPolishStyle(style) {
+  const d = diffDialog.value
+  d.show = false
+  submitAiAsync('polish', { style, scope: d.scope }, { orig: d.orig, sel: d.sel })
+}
+
 // ============ AI 对话 ============
 const chatMsgs = ref([])          // {role:'user'|'ai', text, action, pending, error}
 const chatListRef = ref(null)
 const ACTION_LABELS = { outline: '生成大纲', polish: '润色内容', summarize: '生成摘要', chat: '内容问答' }
+const POLISH_STYLE_LABELS = { concise: '精简凝练', formal: '正式严谨', vivid: '生动活泼', academic: '学术化', casual: '口语化' }
+const SUMMARY_LENGTH_LABELS = { short: '一句话', medium: '一段话', long: '详细' }
 
 // ============ 对话记忆（Redis 多轮，按笔记隔离） ============
 async function loadChatHistory() {
@@ -357,15 +598,44 @@ function scrollChatToBottom() {
   nextTick(() => { chatListRef.value?.scrollTo({ top: chatListRef.value.scrollHeight }) })
 }
 
-/** 统一 AI 动作：提交异步 MQ + 轮询，结果以对话消息气泡呈现 */
-async function submitAiAsync(action) {
+/** 快捷入口：chat 走异步 MQ 链路（submitAiAsync 统一处理） */
+function askChat() { submitAiAsync('chat') }
+
+/** 统一 AI 动作：提交异步 MQ + 轮询，结果以对话消息气泡呈现
+ * ctx（选中润色时传入）：{ orig: 选中文本, sel: 编辑器选区(Slate range) } */
+async function submitAiAsync(action, params = {}, ctx = null) {
   if (action !== 'chat' && !form.value.content) return
   if (action === 'chat' && !chatQuestion.value) return
   const question = action === 'chat' ? chatQuestion.value : null
   if (action === 'chat') chatQuestion.value = ''
+  const snapshot = plainText()
+  // 选中润色：内容用选中文本，并保存选区供结果回填
+  let content = snapshot
+  let sel = ctx?.sel || null
+  if (action === 'polish' && params.scope === 'selection') {
+    content = ctx?.orig ?? editorRef.value?.getSelectionText() ?? ''
+    if (!sel) {
+      const cur = editorRef.value?.selection
+      sel = cur ? JSON.parse(JSON.stringify(cur)) : null
+    }
+    if (!content) return
+  }
   aiBusy.value = true
   ai.value = { ...ai.value, result: '', action }
-  chatMsgs.value.push({ role: 'user', text: action === 'chat' ? question : '✦ ' + ACTION_LABELS[action] })
+  let paramsDesc = ''
+  if (action === 'outline') {
+    if (params.type === 'creative') paramsDesc = '（创作型）'
+    else if (params.type === 'organize') paramsDesc = '（整理型）'
+  } else if (action === 'polish') {
+    const parts = [
+      params.scope === 'selection' ? '选中片段' : '',
+      params.style ? (POLISH_STYLE_LABELS[params.style] || '') : ''
+    ].filter(Boolean)
+    if (parts.length) paramsDesc = `（${parts.join('·')}）`
+  } else if (action === 'summarize' && params.length) {
+    paramsDesc = `（${SUMMARY_LENGTH_LABELS[params.length] || ''}）`
+  }
+  chatMsgs.value.push({ role: 'user', text: action === 'chat' ? question : '✦ ' + ACTION_LABELS[action] + paramsDesc })
   const idx = chatMsgs.value.push({ role: 'ai', text: '', pending: true }) - 1
   scrollChatToBottom()
   try {
@@ -373,18 +643,23 @@ async function submitAiAsync(action) {
       action,
       noteId: form.value.id,
       title: form.value.title,
-      content: plainText(),
-      question
+      content,
+      question,
+      params
     })
     const task = await pollTask(res.data.taskId)
     if (task && task.status === 3) {
-      chatMsgs.value[idx] = { role: 'ai', text: task.errorMsg || 'AI 任务处理失败', error: true }
+      chatMsgs.value[idx] = { role: 'ai', text: task.errorMsg || 'AI 任务处理失败', error: true, action, params, orig: content, sel, snapshot }
     } else if (task) {
-      chatMsgs.value[idx] = { role: 'ai', text: task.result, action }
+      chatMsgs.value[idx] = { role: 'ai', text: task.result, action, params, orig: content, sel, snapshot }
       if (action === 'summarize') form.value.summary = task.result
+      // 润色完成：自动打开 Diff 对比弹窗
+      if (action === 'polish') {
+        openPolishDiff({ scope: params.scope || 'full', orig: content, polished: task.result, sel, snapshot })
+      }
     }
   } catch (e) {
-    chatMsgs.value[idx] = { role: 'ai', text: e.message, error: true }
+    chatMsgs.value[idx] = { role: 'ai', text: e.message, error: true, action, params, orig: content, sel, snapshot }
   } finally {
     aiBusy.value = false
     scrollChatToBottom()
@@ -423,12 +698,6 @@ async function exportPdf() {
     setTimeout(() => { if (iframe.isConnected) iframe.remove() }, 60000)
   } catch (e) { window.$message?.error('导出失败：' + e.message) }
 }
-
-/** 快捷入口：均走对话式异步 MQ 流程 */
-function genOutline() { submitAiAsync('outline') }
-function polish() { submitAiAsync('polish') }
-function summarize() { submitAiAsync('summarize') }
-function askChat() { submitAiAsync('chat') }
 
 // ============ 异步任务（MQ 解耦 + 轮询） ============
 const asyncForm = ref({ action: 'outline' })
@@ -493,9 +762,11 @@ onBeforeUnmount(() => {
   clearTimeout(autoSaveTimer)
   pollTimers.forEach((rec) => clearTimeout(rec.id))
   pollTimers.clear()
+  window.removeEventListener('ai-polish-selection', polishSelection)
   editorRef.value?.destroy()
 })
 onMounted(async () => {
+  window.addEventListener('ai-polish-selection', polishSelection)
   await loadKbs()
   if (route.query.kbId) { form.value.kbId = route.query.kbId; await loadCategories() }
   if (isEdit.value) await loadNote()
@@ -628,6 +899,7 @@ onMounted(async () => {
 .chat-msg.user { justify-content: flex-end; }
 .chat-msg.ai { justify-content: flex-start; }
 .chat-bubble {
+  position: relative;
   max-width: 86%;
   padding: 8px 12px;
   border-radius: 12px;
@@ -738,6 +1010,29 @@ onMounted(async () => {
 .ai-async { display: flex; flex-direction: column; gap: 10px; }
 .async-state { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .insert-btn { margin-top: 10px; width: 100%; }
+
+/* 润色对比（Diff）弹窗 */
+.diff-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.diff-legend { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--c-text-2, #909399); }
+.diff-legend .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.dot-new { background: #e1f3d9; box-shadow: inset 0 0 0 1px #67c23a; }
+.dot-old { background: #fdf6ec; box-shadow: inset 0 0 0 1px #e6a23c; }
+.diff-hint { margin-left: 6px; color: var(--c-text-3, #c0c4cc); }
+.diff-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 2;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md, 8px);
+  font-size: 14px;
+}
+.diff-seg { cursor: pointer; border-radius: 4px; padding: 1px 2px; user-select: none; }
+.diff-seg.keep-new { background: #e1f3d9; color: #2f6000; box-shadow: inset 0 -2px 0 #67c23a; }
+.diff-seg.keep-old { background: #fdf6ec; color: #8a5a00; box-shadow: inset 0 -2px 0 #e6a23c; }
+.diff-scope-hint { display: inline-block; margin-right: 12px; font-size: 12px; color: var(--c-text-3, #c0c4cc); }
 
 /* 中窄屏：回退为常规滚动文档流（上下堆叠） */
 @media (max-width: 1199.98px) {

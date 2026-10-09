@@ -18,12 +18,9 @@ public class AiAsyncMessage implements Serializable {
     private Long taskId;
 
     private Long userId;
-
     private String action;
-
     private String title;
-
     private String content;
-
     private String question;
+    private String params;
 }

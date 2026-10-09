@@ -172,9 +172,10 @@ CREATE TABLE IF NOT EXISTS `ai_task` (
     `user_id`     BIGINT       NOT NULL COMMENT '发起用户ID',
     `note_id`     BIGINT       DEFAULT NULL COMMENT '笔记ID（chat 多轮记忆按笔记隔离；可为空）',
     `action`      VARCHAR(32)  NOT NULL COMMENT '动作：outline/polish/summarize/chat',
-    `title`       VARCHAR(128) DEFAULT NULL COMMENT '笔记标题',
-    `content`     LONGTEXT     COMMENT '笔记内容',
-    `question`    VARCHAR(512) DEFAULT NULL COMMENT '用户问题',
+    `title`        VARCHAR(128) DEFAULT NULL COMMENT '笔记标题',
+    `content`      LONGTEXT     COMMENT '笔记内容',
+    `question`     VARCHAR(512) DEFAULT NULL COMMENT '用户问题',
+    `params`       TEXT         DEFAULT NULL COMMENT '技能参数 JSON',
     `status`      TINYINT      NOT NULL DEFAULT 0 COMMENT '状态 0待处理 1处理中 2成功 3失败',
     `result`      LONGTEXT     COMMENT 'AI 生成结果（成功后写入）',
     `error_msg`   VARCHAR(512) DEFAULT NULL COMMENT '失败原因',
@@ -198,3 +199,7 @@ ALTER TABLE `sys_user`
 -- 已有库升级（AI 对话记忆按笔记隔离）：对非全新初始化重复执行报列已存在，可忽略
 ALTER TABLE `ai_task`
     ADD COLUMN `note_id` BIGINT DEFAULT NULL COMMENT '笔记ID（chat 多轮记忆按笔记隔离；可为空）' AFTER `user_id`;
+
+-- 已有库升级（AI 技能参数）：重复执行报列已存在，可忽略
+ALTER TABLE `ai_task`
+    ADD COLUMN `params` TEXT DEFAULT NULL COMMENT '技能参数 JSON' AFTER `question`;

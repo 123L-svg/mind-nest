@@ -39,6 +39,9 @@ public class AiTask {
 
     private String question;
 
+    /** 技能参数（JSON 字符串） */
+    private String params;
+
     /** 0待处理 1处理中 2成功 3失败 */
     private Integer status;
 
