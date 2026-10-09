@@ -1,4 +1,6 @@
 import http from './http'
+import router from '@/router'
+import { STORAGE_KEYS } from '@/constants'
 
 // 认证 + 用户
 export const authApi = {
@@ -77,7 +79,99 @@ export const aiApi = {
   /** 对话历史（Redis 多轮记忆，按笔记隔离）→ data: [{role:'user'|'assistant', content}] */
   chatHistory: (noteId) => http.get('/ai/chat/history', { params: { noteId } }),
   /** 清空对话记忆（按笔记隔离） */
-  clearChatHistory: (noteId) => http.delete('/ai/chat/history', { params: { noteId } })
+  clearChatHistory: (noteId) => http.delete('/ai/chat/history', { params: { noteId } }),
+
+  /**
+   * AI 对话 SSE 流式：逐字回调 onDelta，结束后返回完整回答。
+   * 用 fetch 而非 axios/EventSource：需要流式读 body + 自定义 Authorization 头。
+   * @param payload {noteId,title,content,question}
+   * @param opts {onDelta(text), signal} signal 为 AbortController.signal，可中断生成
+   */
+  chatStream: async (payload, { onDelta, signal } = {}) => {
+    const token = localStorage.getItem(STORAGE_KEYS.TOKEN)
+    const res = await fetch('/api/ai/chat/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(payload),
+      signal
+    })
+    if (!res.ok) throw new Error(`请求失败（${res.status}）`)
+
+    // 非流式响应（认证失败等业务码 JSON）：统一按业务结果处理
+    const ctype = res.headers.get('content-type') || ''
+    if (ctype.includes('application/json')) {
+      const body = await res.json()
+      if (body.code === 401) {
+        localStorage.removeItem(STORAGE_KEYS.TOKEN)
+        router.push('/login')
+        throw new Error('登录已过期，请重新登录')
+      }
+      throw new Error(body.message || '请求失败')
+    }
+    if (!res.body) throw new Error('当前浏览器不支持流式输出')
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buf = ''
+    let full = ''
+    let finished = false   // 收到 done 事件即结束，不依赖服务器关闭连接
+
+    /** 处理单个 SSE 事件块（event:名称 + data:负载） */
+    const handleEvent = (name, data) => {
+      if (name === 'delta') {
+        try {
+          const t = JSON.parse(data).t
+          if (t) { full += t; onDelta?.(t) }
+        } catch { /* 忽略坏帧 */ }
+      } else if (name === 'done') {
+        try {
+          const content = JSON.parse(data).content
+          if (content) full = content
+        } catch { /* 忽略坏帧 */ }
+        finished = true
+      } else if (name === 'error') {
+        let msg = 'AI 处理失败'
+        try { msg = JSON.parse(data).message || msg } catch { /* 保底 */ }
+        finished = true
+        throw new Error(msg)
+      }
+    }
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        // SSE 事件以空行分隔
+        let idx
+        while ((idx = buf.indexOf('\n\n')) >= 0) {
+          const raw = buf.slice(0, idx)
+          buf = buf.slice(idx + 2)
+          let name = 'message'
+          const dataLines = []
+          for (const line of raw.split('\n')) {
+            if (line.startsWith('event:')) name = line.slice(6).trim()
+            else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
+          }
+          if (dataLines.length) handleEvent(name, dataLines.join('\n'))
+          // done 已收到：主动结束，不等服务器关连接（避免 read 悬挂）
+          if (finished) {
+            reader.cancel().catch(() => {})
+            return full
+          }
+        }
+      }
+    } catch (e) {
+      // 服务器断开（terminated）等：若已拿到 done 内容则正常返回，否则抛错
+      if (finished) return full
+      if (e.name === 'AbortError') throw e
+      throw new Error(e.message || '流式读取中断')
+    }
+    return full
+  }
 }
 
 // 文件

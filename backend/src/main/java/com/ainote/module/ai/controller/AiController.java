@@ -1,5 +1,6 @@
 package com.ainote.module.ai.controller;
 
+import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.ainote.common.exception.BusinessException;
 import com.ainote.common.ratelimit.RateLimit;
@@ -18,6 +19,7 @@ import com.ainote.module.ai.vo.AiTaskVO;
 import com.ainote.module.ai.vo.ChatMessageVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -28,9 +30,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * AI 能力接口
@@ -76,6 +81,69 @@ public class AiController {
     @RateLimit(key = "ai", capacity = 3, refillPerSecond = 1, message = "AI 调用过于频繁，请稍后再试")
     public Result<AiResultVO> chat(@RequestBody AiRequestDTO dto) {
         return Result.success(doExecute(dto, AiService.CHAT));
+    }
+
+    /** chat 流式执行线程池（Java 21 虚拟线程：每个流式连接占一个，生成期间挂起不占平台线程） */
+    private final ExecutorService chatStreamExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+    /**
+     * AI 对话（SSE 流式逐字输出）。
+     * <p>事件协议：delta {"t":"片段"} / done {"content":"全文"} / error {"message":"..."}；
+     * 流结束后写回 Redis 多轮记忆（mock 模式跳过）。</p>
+     */
+    @Operation(summary = "AI 对话（SSE 流式逐字输出）")
+    @PostMapping(value = "/chat/stream")
+    @RateLimit(key = "ai", capacity = 3, refillPerSecond = 1, message = "AI 调用过于频繁，请稍后再试")
+    public SseEmitter chatStream(@RequestBody AiRequestDTO dto, HttpServletResponse response) {
+        // 关闭 Nginx 对该响应的代理缓冲，避免流被攒成一整块下发
+        response.setHeader("X-Accel-Buffering", "no");
+        // userId 必须在请求线程取出：异步线程拿不到 SecurityContext ThreadLocal
+        Long userId = SecurityUtil.getUserId();
+        SseEmitter emitter = new SseEmitter(aiProperties.getTimeoutMillis() + 30_000L);
+
+        chatStreamExecutor.execute(() -> {
+            try {
+                StringBuilder full = new StringBuilder();
+                String answer = aiService.chatStream(userId, dto.getNoteId(), dto.getTitle(),
+                        dto.getContent(), dto.getQuestion(), delta -> {
+                            full.append(delta);
+                            sendSse(emitter, "delta", new JSONObject().set("t", delta));
+                        });
+                if (answer.length() > full.length()) {
+                    full.setLength(0);
+                    full.append(answer);
+                }
+                // 流式完成：写回多轮记忆（mock 模式跳过，避免污染真实上下文）
+                boolean mock = aiProperties.isMockEnabled() || !aiProperties.isRealReady();
+                if (!mock && userId != null && dto.getQuestion() != null && !dto.getQuestion().isBlank()) {
+                    chatMemory.append(userId, dto.getNoteId(), dto.getQuestion(), answer);
+                }
+                sendSse(emitter, "done", new JSONObject().set("content", answer));
+                emitter.complete();
+            } catch (Exception e) {
+                trySendSse(emitter, "error", new JSONObject().set("message", e.getMessage()));
+                try {
+                    emitter.complete();
+                } catch (Exception ignore) { /* 已完成/断开 */ }
+            }
+        });
+        return emitter;
+    }
+
+    /** 发送 SSE 事件：失败时抛出异常以中断上游 LLM 流读取（客户端已断开） */
+    private void sendSse(SseEmitter emitter, String event, JSONObject data) {
+        try {
+            emitter.send(SseEmitter.event().name(event).data(data.toString()));
+        } catch (Exception e) {
+            throw new IllegalStateException("SSE 发送失败（客户端可能已断开）", e);
+        }
+    }
+
+    /** 发送 SSE 事件（静默）：仅用于收尾（error 通知/complete），失败不再传播 */
+    private void trySendSse(SseEmitter emitter, String event, JSONObject data) {
+        try {
+            emitter.send(SseEmitter.event().name(event).data(data.toString()));
+        } catch (Exception ignore) { /* 客户端断开 */ }
     }
 
     @Operation(summary = "AI 对话历史（Redis 多轮记忆，按笔记隔离）")

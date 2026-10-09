@@ -15,7 +15,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * AI 能力服务（OpenAI 兼容 Chat Completions）
@@ -96,6 +100,122 @@ public class AiService {
             log.warn("技能参数解析失败，将忽略参数执行：{}", e.getMessage());
             return new JSONObject();
         }
+    }
+
+    /**
+     * 流式对话（SSE）：逐 token 回调 onDelta，返回完整回答。
+     * <p>与 {@link #execute} 的区别：不走 MQ 异步链路，由 SSE 端点直连调用；
+     * 携带 Redis 历史上下文，但记忆写回由调用方在流结束后决定（mock 时跳过）。</p>
+     */
+    public String chatStream(Long userId, Long noteId, String title, String content,
+                             String question, Consumer<String> onDelta) {
+        AiSkill skill = skillRegistry.require(CHAT);
+        JSONObject empty = new JSONObject();
+        String system = skill.systemPrompt(empty);
+        String user = skill.userPrompt(empty, title, content, question);
+
+        // Mock 模式：模拟逐字输出，不读写对话记忆
+        if (props.isMockEnabled() || !props.isRealReady()) {
+            return mockStream(onDelta);
+        }
+        List<ChatMessageVO> history = userId == null ? List.of() : chatMemory.getHistory(userId, noteId);
+        return chatCompletionStream(props.getModel(), system, user, history, onDelta);
+    }
+
+    /**
+     * 流式调 OpenAI 兼容 /chat/completions（stream=true）。
+     * <p>SSE 帧格式：data:{"choices":[{"delta":{"content":"..."}}]}，data:[DONE] 结束；
+     * 客户端断开时 onDelta 内的 emitter.send 会抛异常，向上传播以中断读取。</p>
+     */
+    private String chatCompletionStream(String model, String system, String user,
+                                        List<ChatMessageVO> history, Consumer<String> onDelta) {
+        JSONObject body = new JSONObject();
+        body.set("model", model);
+        body.set("temperature", 0.6);
+        body.set("stream", true);
+        JSONArray messages = new JSONArray();
+        messages.add(new JSONObject().set("role", "system").set("content", system));
+        for (ChatMessageVO h : history) {
+            messages.add(new JSONObject().set("role", h.getRole()).set("content", h.getContent()));
+        }
+        messages.add(new JSONObject().set("role", "user").set("content", user));
+        body.set("messages", messages);
+
+        String url = StrUtil.removeSuffix(props.getBaseUrl(), "/") + "/chat/completions";
+        StringBuilder full = new StringBuilder();
+        // executeAsync：立即返回不预读 body，bodyStream() 才是真实网络流（逐 token 到达）
+        try (HttpResponse resp = HttpRequest.post(url)
+                .header("Authorization", "Bearer " + props.getApiKey())
+                .header("Content-Type", "application/json")
+                .header("Accept", "text/event-stream")
+                .timeout((int) props.getTimeoutMillis())
+                .body(body.toString())
+                .executeAsync()) {
+            if (!resp.isOk()) {
+                throw new BusinessException("AI 调用失败：" + resp.body());
+            }
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(resp.bodyStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String data = parseSseData(line);
+                    if (data == null || "[DONE]".equals(data)) {
+                        if ("[DONE]".equals(data)) break;
+                        continue;
+                    }
+                    String delta = extractDeltaContent(data);
+                    if (StrUtil.isNotEmpty(delta)) {
+                        full.append(delta);
+                        onDelta.accept(delta);
+                    }
+                }
+            }
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException("AI 流式调用异常：" + e.getMessage());
+        }
+        return full.toString();
+    }
+
+    /** 解析 SSE 行：data:xxx → xxx；注释(:开头)/空行/非 data 行返回 null */
+    private String parseSseData(String line) {
+        if (StrUtil.isBlank(line) || line.startsWith(":") || !line.startsWith("data:")) {
+            return null;
+        }
+        return line.substring(5).trim();
+    }
+
+    /** 从流式 chunk JSON 提取增量文本（choices[0].delta.content），解析失败返回 null */
+    private String extractDeltaContent(String data) {
+        try {
+            JSONArray choices = JSONUtil.parseObj(data).getJSONArray("choices");
+            if (choices == null || choices.isEmpty()) {
+                return null;
+            }
+            JSONObject delta = choices.getJSONObject(0).getJSONObject("delta");
+            return delta == null ? null : delta.getStr("content");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Mock 流式：模拟逐字输出（每 2 字一推，体验打字机效果） */
+    private String mockStream(Consumer<String> onDelta) {
+        String text = mock(CHAT, null, null);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < text.length(); i += 2) {
+            String piece = text.substring(i, Math.min(i + 2, text.length()));
+            sb.append(piece);
+            try {
+                Thread.sleep(40);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            onDelta.accept(piece);
+        }
+        return sb.toString();
     }
 
     /**

@@ -60,6 +60,12 @@
             <div v-if="chatMsgs.length" ref="chatListRef" class="chat-list">
               <div v-for="(m, i) in chatMsgs" :key="i" class="chat-msg" :class="m.role">
                 <div class="chat-bubble" :class="{ error: m.error }">
+                  <!-- 复制按钮：hover 气泡时浮现 -->
+                  <el-tooltip v-if="m.role === 'ai' && !m.pending" content="复制" placement="top">
+                    <el-button class="copy-btn" link size="small" @click="copyMsgText(m.text)">
+                      <el-icon><CopyDocument /></el-icon>
+                    </el-button>
+                  </el-tooltip>
                   <pre>{{ m.pending ? 'AI 处理中…' : m.text }}</pre>
                   <!-- 大纲结果：一键插入正文 -->
                   <el-button v-if="m.role === 'ai' && m.action === 'outline' && !m.pending && !m.error"
@@ -109,9 +115,9 @@
 
             <!-- 快捷功能工具条（下拉选参数后执行） -->
             <div class="chat-tools">
-              <el-dropdown trigger="click" :disabled="aiBusy || !form.content"
+              <el-dropdown trigger="click" :disabled="aiBusy || chatStreaming || !form.content"
                            @command="(t) => submitAiAsync('outline', { type: t })">
-                <button class="chat-tool" :disabled="aiBusy || !form.content">
+                <button class="chat-tool" :disabled="aiBusy || chatStreaming || !form.content">
                   <el-icon><List /></el-icon>大纲
                 </button>
                 <template #dropdown>
@@ -122,9 +128,9 @@
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
-              <el-dropdown trigger="click" :disabled="aiBusy || !form.content"
+              <el-dropdown trigger="click" :disabled="aiBusy || chatStreaming || !form.content"
                            @command="(s) => submitAiAsync('polish', s ? { style: s } : {})">
-                <button class="chat-tool" :disabled="aiBusy || !form.content">
+                <button class="chat-tool" :disabled="aiBusy || chatStreaming || !form.content">
                   <el-icon><MagicStick /></el-icon>润色
                 </button>
                 <template #dropdown>
@@ -138,9 +144,9 @@
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
-              <el-dropdown trigger="click" :disabled="aiBusy || !form.content"
+              <el-dropdown trigger="click" :disabled="aiBusy || chatStreaming || !form.content"
                            @command="(l) => submitAiAsync('summarize', { length: l })">
-                <button class="chat-tool" :disabled="aiBusy || !form.content">
+                <button class="chat-tool" :disabled="aiBusy || chatStreaming || !form.content">
                   <el-icon><Document /></el-icon>摘要
                 </button>
                 <template #dropdown>
@@ -158,8 +164,11 @@
               <el-input v-model="chatQuestion" type="textarea" :rows="2" resize="none"
                         placeholder="随便聊点什么，Enter 发送，Shift+Enter 换行"
                         @keydown.enter.exact.prevent="askChat" />
-              <el-button type="primary" class="chat-send" :icon="Promotion"
+              <!-- 流式生成中显示「停止」，否则显示「发送」 -->
+              <el-button v-if="!chatStreaming" type="primary" class="chat-send" :icon="Promotion"
                          :loading="aiBusy" :disabled="!chatQuestion" @click="askChat" />
+              <el-button v-else type="danger" class="chat-send" :icon="VideoPause"
+                         title="停止生成" @click="stopChat" />
             </div>
           </el-card>
         </el-col>
@@ -235,7 +244,7 @@ import { ref, shallowRef, computed, onMounted, onBeforeUnmount, nextTick } from 
 import { useRoute, useRouter } from 'vue-router'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import { Boot, SlateTransforms } from '@wangeditor/editor'
-import { List, MagicStick, Document, ArrowLeft, ArrowDown, ChatDotRound, Promotion } from '@element-plus/icons-vue'
+import { List, MagicStick, Document, ArrowLeft, ArrowDown, ChatDotRound, Promotion, CopyDocument, VideoPause } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { kbApi, categoryApi, noteApi, aiApi, fileApi, exportApi } from '@/api'
 import '@wangeditor/editor/dist/css/style.css'
@@ -598,8 +607,23 @@ function scrollChatToBottom() {
   nextTick(() => { chatListRef.value?.scrollTo({ top: chatListRef.value.scrollHeight }) })
 }
 
-/** 快捷入口：chat 走异步 MQ 链路（submitAiAsync 统一处理） */
-function askChat() { submitAiAsync('chat') }
+/** 复制 AI 回复文本到剪贴板（clipboard API + execCommand 兜底） */
+async function copyMsgText(text) {
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    ta.remove()
+  }
+  window.$message?.success('已复制到剪贴板')
+}
 
 /** 统一 AI 动作：提交异步 MQ + 轮询，结果以对话消息气泡呈现
  * ctx（选中润色时传入）：{ orig: 选中文本, sel: 编辑器选区(Slate range) } */
@@ -699,6 +723,56 @@ async function exportPdf() {
   } catch (e) { window.$message?.error('导出失败：' + e.message) }
 }
 
+// ============ chat 流式对话（SSE 逐字输出） ============
+const chatStreaming = ref(false)
+let chatAbort = null
+let lastStreamScroll = 0
+
+/** 停止生成：中断 SSE 流，已生成部分保留 */
+function stopChat() { chatAbort?.abort() }
+
+/** 发送 chat：走 SSE 流式接口，气泡逐字上屏；完成后后端写回多轮记忆 */
+async function askChat() {
+  if (chatStreaming.value || aiBusy.value || !chatQuestion.value) return
+  const question = chatQuestion.value
+  chatQuestion.value = ''
+  chatMsgs.value.push({ role: 'user', text: question })
+  const idx = chatMsgs.value.push({ role: 'ai', text: '' }) - 1
+  chatStreaming.value = true
+  scrollChatToBottom()
+  chatAbort = new AbortController()
+  try {
+    const full = await aiApi.chatStream({
+      noteId: form.value.id,
+      title: form.value.title,
+      content: plainText(),
+      question
+    }, {
+      onDelta: (t) => {
+        chatMsgs.value[idx].text += t
+        // 滚动节流：避免每个 delta 都触发滚动
+        const now = Date.now()
+        if (now - lastStreamScroll > 200) {
+          lastStreamScroll = now
+          scrollChatToBottom()
+        }
+      },
+      signal: chatAbort.signal
+    })
+    if (full) chatMsgs.value[idx].text = full
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      chatMsgs.value[idx].text += (chatMsgs.value[idx].text ? '\n\n' : '') + '（已停止生成）'
+    } else {
+      chatMsgs.value[idx] = { role: 'ai', text: e.message, error: true }
+    }
+  } finally {
+    chatStreaming.value = false
+    chatAbort = null
+    scrollChatToBottom()
+  }
+}
+
 // ============ 异步任务（MQ 解耦 + 轮询） ============
 const asyncForm = ref({ action: 'outline' })
 const asyncTask = ref({})           // {taskId,status,statusText,result,errorMsg}
@@ -762,6 +836,7 @@ onBeforeUnmount(() => {
   clearTimeout(autoSaveTimer)
   pollTimers.forEach((rec) => clearTimeout(rec.id))
   pollTimers.clear()
+  chatAbort?.abort()   // 流式对话进行中离开页面：中断生成
   window.removeEventListener('ai-polish-selection', polishSelection)
   editorRef.value?.destroy()
 })
@@ -917,6 +992,17 @@ onMounted(async () => {
 }
 .chat-bubble.error { color: var(--c-danger); }
 .chat-bubble pre { white-space: pre-wrap; word-break: break-word; font-family: inherit; margin: 0; }
+/* 复制按钮：气泡右下角，hover 气泡时浮现 */
+.copy-btn {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  color: var(--c-text-3, #909399);
+}
+.chat-bubble:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { color: var(--c-primary, #b88230); }
 
 /* 空状态 */
 .chat-empty {
