@@ -29,13 +29,14 @@ export function hlHtml(text) {
 }
 
 /**
- * 格式化为日期时间（秒级截断），兼容后端默认 "yyyy-MM-dd HH:mm:ss"。
+ * 格式化为日期时间（秒级截断），兼容后端 "yyyy-MM-dd HH:mm:ss"
+ * 与 LocalDateTime 的 ISO 序列化 "yyyy-MM-ddTHH:mm:ss"（T 替换为空格）。
  * @param {string|undefined|null} v
  * @returns {string}
  */
 export function formatDateTime(v) {
   if (!v) return ''
-  const s = String(v)
+  const s = String(v).replace('T', ' ')
   return s.length > 19 ? s.slice(0, 19) : s
 }
 

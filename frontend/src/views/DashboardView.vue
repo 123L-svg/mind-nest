@@ -135,10 +135,44 @@
       </el-container>
     </el-container>
 
-    <!-- 详情弹窗 -->
-    <el-dialog v-model="detailModal.show" :title="detailModal.title" width="720px"
-               top="6vh" @closed="detailModal.show = false">
-      <div class="rich" v-html="detailModal.html"></div>
+    <!-- 详情弹窗：飞书文档风阅读态 -->
+    <el-dialog v-model="detailModal.show" width="820px" top="6vh" class="doc-reader"
+               :show-close="false" @closed="detailModal.show = false">
+      <div v-if="detailModal.note" class="doc-viewer">
+        <!-- 文档头：标题 + 元信息 + 操作 -->
+        <header class="doc-header">
+          <h2 class="doc-title">{{ detailModal.note.title || '（无标题）' }}</h2>
+          <div class="doc-meta">
+            <span class="meta-item" :title="'更新于 ' + formatDateTime(detailModal.note.updateTime)">
+              <el-icon><Clock /></el-icon>{{ formatDate(detailModal.note.updateTime) }}
+            </span>
+            <span class="meta-item"><el-icon><View /></el-icon>{{ detailModal.note.viewCount || 0 }} 次浏览</span>
+            <span class="meta-item"><el-icon><Document /></el-icon>{{ detailModal.note.wordCount || 0 }} 字</span>
+            <el-tag v-for="t in detailModal.note.tags || []" :key="t.id" size="small" effect="plain">
+              {{ t.name }}
+            </el-tag>
+          </div>
+          <div class="doc-actions">
+            <el-button type="primary" size="small" :icon="Edit" @click="editNote(detailModal.note.id)">
+              编辑
+            </el-button>
+            <button class="doc-close" title="关闭 (Esc)" @click="detailModal.show = false">
+              <el-icon><Close /></el-icon>
+            </button>
+          </div>
+        </header>
+
+        <!-- 摘要（可选）：金侧边引言块 -->
+        <div v-if="detailModal.note.summary" class="doc-summary">{{ detailModal.note.summary }}</div>
+
+        <!-- 正文：限宽阅读列 -->
+        <div class="doc-body rich" v-html="detailModal.note.content || '<p>（无内容）</p>'"></div>
+
+        <!-- 底部信息条 -->
+        <footer class="doc-footer">
+          创建于 {{ formatDateTime(detailModal.note.createTime) }} · 更新于 {{ formatDateTime(detailModal.note.updateTime) }}
+        </footer>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -146,7 +180,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Sunny, Moon, Plus, Setting, SwitchButton, Edit, Delete, Clock, View, Document, Folder, CollectionTag, TrendCharts } from '@element-plus/icons-vue'
+import { Sunny, Moon, Plus, Setting, SwitchButton, Edit, Delete, Clock, View, Document, Folder, CollectionTag, TrendCharts, Close } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { useTheme } from '@/composables/useTheme'
 import { kbApi, noteApi, authApi } from '@/api'
@@ -179,7 +213,7 @@ const newKbName = ref('')
 const noteKeyword = ref('')
 const kbsLoading = ref(false)
 const notesLoading = ref(false)
-const detailModal = ref({ show: false, title: '', html: '' })
+const detailModal = ref({ show: false, note: null })
 
 async function refreshInfo() {
   try { user.value = await store.fetchInfo() } catch (e) { /* 401 已处理 */ }
@@ -266,9 +300,11 @@ function clearSearch() {
 }
 
 async function viewDetail(id) {
-  const res = await noteApi.detail(id)
-  const d = res.data
-  detailModal.value = { show: true, title: d.title, html: d.content || '<p>（无内容）</p>' }
+  const d = (await noteApi.detail(id)).data
+  // 详情接口已自增浏览量，直接展示返回值即可
+  detailModal.value = { show: true, note: d }
+  const row = notes.value.find((n) => n.id === id)
+  if (row) row.viewCount = d.viewCount
 }
 
 async function removeNote(id) {
@@ -475,12 +511,163 @@ onMounted(() => { refreshInfo(); loadKbs() })
   padding: 60px 0;
 }
 
-.rich img { max-width: 100%; }
-.rich { line-height: 1.7; }
+/* ===== 详情弹窗：飞书文档风阅读态 ===== */
+.doc-viewer {
+  display: flex;
+  flex-direction: column;
+  max-height: 82vh;
+  background: var(--c-surface);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* 文档头：标题 + 元信息，操作区悬浮右上 */
+.doc-header {
+  position: relative;
+  flex-shrink: 0;
+  padding: 24px 28px 16px;
+  border-bottom: 1px solid var(--c-divider);
+  background: var(--c-surface);
+}
+.doc-title {
+  margin: 0 128px 10px 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  color: var(--c-text);
+  word-break: break-word;
+}
+.doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--c-text-sub);
+}
+.doc-actions {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.doc-close {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  color: var(--c-text-sub);
+  font-size: 16px;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.doc-close:hover { background: var(--c-surface-sub); color: var(--c-text); }
+
+/* 摘要：金侧边引言块 */
+.doc-summary {
+  flex-shrink: 0;
+  margin: 16px 28px 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--c-text-sub);
+  background: var(--grad-brand-soft);
+  border-left: 3px solid var(--c-primary);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+}
+
+/* 正文：内部滚动的阅读列 */
+.doc-body {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  padding: 24px 32px 28px;
+  font-size: 15px;
+  line-height: 1.85;
+  color: var(--c-text);
+}
+/* 富文本排版层级（v-html 内容需 :deep 穿透） */
+.doc-body :deep(p) { margin: 0 0 12px; }
+.doc-body :deep(h1) { margin: 6px 0 14px; font-family: var(--font-display); font-size: 22px; font-weight: 700; line-height: 1.4; }
+.doc-body :deep(h2) { margin: 20px 0 12px; font-family: var(--font-display); font-size: 19px; font-weight: 700; line-height: 1.4; }
+.doc-body :deep(h3) { margin: 18px 0 10px; font-family: var(--font-display); font-size: 17px; font-weight: 600; line-height: 1.4; }
+.doc-body :deep(h4), .doc-body :deep(h5), .doc-body :deep(h6) { margin: 16px 0 8px; font-size: 15.5px; font-weight: 600; }
+.doc-body :deep(h1:first-child), .doc-body :deep(h2:first-child),
+.doc-body :deep(h3:first-child), .doc-body :deep(h4:first-child) { margin-top: 0; }
+.doc-body :deep(ul), .doc-body :deep(ol) { margin: 0 0 12px; padding-left: 1.6em; }
+.doc-body :deep(li) { margin: 4px 0; }
+.doc-body :deep(li > p) { margin: 0 0 4px; }
+.doc-body :deep(blockquote) {
+  margin: 0 0 12px;
+  padding: 10px 16px;
+  border-left: 3px solid var(--c-primary);
+  background: var(--grad-brand-soft);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  color: var(--c-text-sub);
+}
+.doc-body :deep(code) {
+  font-family: Consolas, Monaco, monospace;
+  font-size: 0.9em;
+  padding: 2px 6px;
+  background: var(--c-surface-sub);
+  border-radius: var(--r-sm);
+}
+.doc-body :deep(pre) {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  background: var(--c-surface-sub);
+  border-radius: var(--r-md);
+  overflow-x: auto;
+}
+.doc-body :deep(pre code) { padding: 0; background: transparent; }
+.doc-body :deep(a) { color: var(--c-primary); text-decoration: none; }
+.doc-body :deep(a:hover) { text-decoration: underline; }
+.doc-body :deep(img) { max-width: 100%; margin: 6px 0; border-radius: var(--r-md); }
+.doc-body :deep(table) { width: 100%; margin: 0 0 12px; border-collapse: collapse; font-size: 14px; }
+.doc-body :deep(th), .doc-body :deep(td) { padding: 8px 12px; border: 1px solid var(--c-border); text-align: left; }
+.doc-body :deep(th) { background: var(--c-surface-sub); font-weight: 600; }
+.doc-body :deep(hr) { margin: 20px 0; border: none; height: 1px; background: var(--c-divider); }
+.doc-body :deep(:last-child) { margin-bottom: 0; }
+
+/* 底部信息条 */
+.doc-footer {
+  flex-shrink: 0;
+  padding: 10px 28px;
+  border-top: 1px solid var(--c-divider);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--c-text-sub);
+  background: var(--c-surface);
+}
 
 @media (max-width: 768px) {
   .layout { flex-direction: column; }
   .sider { width: 100% !important; border-right: none; border-bottom: 1px solid var(--c-border); max-height: 260px; }
   .kb-menu { max-height: 140px; }
+}
+</style>
+
+<style>
+/* 详情弹窗外壳（el-dialog teleport 到 body，需全局样式）：
+   大圆角卡片、隐藏默认标题栏与内边距，交由 .doc-viewer 接管布局 */
+.el-dialog.doc-reader {
+  padding: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--c-surface);
+  box-shadow: var(--shadow-lg);
+}
+.doc-reader .el-dialog__header { display: none; }
+.doc-reader .el-dialog__body { padding: 0; }
+@media (max-width: 900px) {
+  .el-dialog.doc-reader { width: 94% !important; }
 }
 </style>

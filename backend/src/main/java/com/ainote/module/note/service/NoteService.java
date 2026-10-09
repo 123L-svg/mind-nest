@@ -125,6 +125,8 @@ public class NoteService {
         vo.setContent(note.getContent());
         enrichTags(List.of(vo));
         noteMapper.incrViewCount(note.getId());
+        // 自增后返回最新浏览数（实体字段仍是自增前的值，需 +1）
+        vo.setViewCount((note.getViewCount() == null ? 0 : note.getViewCount()) + 1);
         return vo;
     }
 
