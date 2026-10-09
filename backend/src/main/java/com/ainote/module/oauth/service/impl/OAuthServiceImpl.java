@@ -112,21 +112,33 @@ public class OAuthServiceImpl implements OAuthService {
 
     /** 按平台构造 JustAuth 请求（仅支持已配置且已开启的平台） */
     private AuthRequest buildRequest(String source) {
-        OAuthProperties.Provider p = oauthProperties.getProviders().get(source.toLowerCase());
+        String s = source.toLowerCase();
+        OAuthProperties.Provider p = oauthProperties.getProviders().get(s);
         if (p == null || StrUtil.isBlank(p.getClientId()) || StrUtil.isBlank(p.getClientSecret())) {
             throw new BusinessException("第三方平台 [ " + source + " ] 未配置，请联系管理员");
+        }
+        // 占位配置（yml 里未替换的 mock 默认值）判定为未接入，
+        // 直接返回明确提示，避免跳到 GitHub/Gitee 的 404 页面
+        if (p.getClientId().startsWith("mock-")) {
+            throw new BusinessException(platformName(s) + " 登录尚未接入：请先在其开放平台创建 OAuth 应用"
+                    + "（回调地址 " + p.getRedirectUri() + "），再配置 OAUTH_" + s.toUpperCase()
+                    + "_* 环境变量并重启后端");
         }
         AuthConfig config = AuthConfig.builder()
                 .clientId(p.getClientId())
                 .clientSecret(p.getClientSecret())
                 .redirectUri(p.getRedirectUri())
                 .build();
-        String s = source.toLowerCase();
         return switch (s) {
             case "github" -> new AuthGithubRequest(config);
             case "gitee" -> new AuthGiteeRequest(config);
             default -> throw new BusinessException("不支持的第三方平台：" + source);
         };
+    }
+
+    /** 平台显示名（用于用户提示） */
+    private String platformName(String s) {
+        return "github".equals(s) ? "GitHub" : "gitee".equals(s) ? "Gitee" : s;
     }
 
     /** 首次第三方登录：自动创建本地账号（password 为空，仅可通过第三方登录） */

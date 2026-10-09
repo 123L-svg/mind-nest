@@ -97,6 +97,14 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: note-files
       NOTE_RECYCLE_KEEP_DAYS: ${NOTE_RECYCLE_KEEP_DAYS:-30}
+      # 第三方 OAuth（.env 未配置时用占位值，后端对占位配置返回明确的“未接入”提示）
+      OAUTH_ENABLED: ${OAUTH_ENABLED:-true}
+      OAUTH_GITHUB_CLIENT_ID: ${OAUTH_GITHUB_CLIENT_ID:-mock-github-client-id}
+      OAUTH_GITHUB_CLIENT_SECRET: ${OAUTH_GITHUB_CLIENT_SECRET:-mock-github-secret}
+      OAUTH_GITHUB_REDIRECT_URI: ${OAUTH_GITHUB_REDIRECT_URI:-https://damson.cloud/oauth/callback}
+      OAUTH_GITEE_CLIENT_ID: ${OAUTH_GITEE_CLIENT_ID:-mock-gitee-client-id}
+      OAUTH_GITEE_CLIENT_SECRET: ${OAUTH_GITEE_CLIENT_SECRET:-mock-gitee-secret}
+      OAUTH_GITEE_REDIRECT_URI: ${OAUTH_GITEE_REDIRECT_URI:-https://damson.cloud/oauth/callback}
     # 生产不暴露端口，对外统一走 Nginx 反代
     volumes:
       - upload-data:/app/upload

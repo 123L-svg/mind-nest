@@ -127,11 +127,11 @@ oauth:
     github:
       client-id: ${OAUTH_GITHUB_CLIENT_ID:mock-github-client-id}
       client-secret: ${OAUTH_GITHUB_CLIENT_SECRET:mock-github-secret}
-      redirect-uri: ${OAUTH_GITHUB_REDIRECT_URI:http://localhost:5174/oauth/callback}
+      redirect-uri: ${OAUTH_GITHUB_REDIRECT_URI:http://localhost:5173/oauth/callback}
     gitee:
       client-id: ${OAUTH_GITEE_CLIENT_ID:mock-gitee-client-id}
       client-secret: ${OAUTH_GITEE_CLIENT_SECRET:mock-gitee-secret}
-      redirect-uri: ${OAUTH_GITEE_REDIRECT_URI:http://localhost:5174/oauth/callback}
+      redirect-uri: ${OAUTH_GITEE_REDIRECT_URI:http://localhost:5173/oauth/callback}
 
 # AI 能力（OpenAI 兼容接口，走 ChatAnywhere 聚合服务）
 # 接口地址固定为 https://api.chatanywhere.tech/v1（国内直连）。
