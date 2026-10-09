@@ -4,8 +4,8 @@
       <!-- 左侧边栏：品牌 + 新建 + 知识库导航 + 用户 -->
       <el-aside class="sider" width="240px">
         <div class="sider-brand">
-          <el-icon :size="22"><Notebook /></el-icon>
-          <span class="brand">MindNest</span>
+          <span class="seal">巢</span>
+          <span class="brand">MindNest · 智巢</span>
         </div>
         <div class="sider-create">
           <el-input v-model="newKbName" size="small" placeholder="新建知识库"
@@ -146,7 +146,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Notebook, Sunny, Moon, Plus, Setting, SwitchButton, Edit, Delete, Clock, View, Document, Folder, CollectionTag, TrendCharts } from '@element-plus/icons-vue'
+import { Sunny, Moon, Plus, Setting, SwitchButton, Edit, Delete, Clock, View, Document, Folder, CollectionTag, TrendCharts } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { useTheme } from '@/composables/useTheme'
 import { kbApi, noteApi, authApi } from '@/api'
@@ -304,30 +304,48 @@ onMounted(() => { refreshInfo(); loadKbs() })
 .layout { min-height: 100vh; }
 .dash { min-height: 100vh; }
 
-/* 侧边栏 */
+/* ===== 侧边栏（绢帛） ===== */
 .sider {
   display: flex; flex-direction: column;
-  background: var(--c-surface);
+  background: var(--c-surface-sub);
   border-right: 1px solid var(--c-border);
 }
 .sider-brand {
   display: flex; align-items: center; gap: 10px;
-  padding: 18px 16px 14px; color: var(--c-text); font-weight: 700; font-size: 17px;
+  padding: 18px 16px 14px;
 }
-.sider-brand :deep(.el-icon) {
-  width: 34px; height: 34px;
+.seal {
+  width: 30px; height: 30px;
   display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 10px;
-  background: var(--grad-brand);
-  color: #fff;
+  font-family: var(--font-display);
+  font-size: 17px; font-weight: 700;
+  color: #f7ecd7;
+  background: #b03a2a;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 2px rgba(247, 236, 215, 0.25), 0 2px 8px rgba(176, 58, 42, 0.28);
+}
+.brand {
+  font-family: var(--font-display);
+  font-size: 16px; font-weight: 600; letter-spacing: 0.06em;
+  color: var(--c-text);
 }
 .sider-create { padding: 0 12px 10px; }
 .sider-head {
   display: flex; justify-content: space-between; align-items: center;
   padding: 6px 16px; color: var(--c-text-sub); font-size: 12px;
+  letter-spacing: 0.08em;
 }
-.kb-menu { flex: 1; overflow-y: auto; border-right: none; }
-.kb-menu .el-menu-item { height: 46px; padding: 0 16px; }
+.kb-menu { flex: 1; overflow-y: auto; border-right: none; background: transparent; }
+.kb-menu :deep(.el-menu-item) {
+  height: 44px; padding: 0 14px; margin: 2px 8px;
+  border-radius: var(--r-md);
+}
+.kb-menu :deep(.el-menu-item.is-active) {
+  background: var(--grad-brand-soft);
+}
+.kb-menu :deep(.el-menu-item:hover) {
+  background: var(--grad-brand-soft);
+}
 .kb-item { display: flex; justify-content: space-between; align-items: center; width: 100%; }
 .kb-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kb-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
@@ -354,11 +372,11 @@ onMounted(() => { refreshInfo(); loadKbs() })
   cursor: pointer;
   transition: background var(--t-fast), color var(--t-fast);
 }
-.sider-link:hover { background: var(--c-surface-sub); color: var(--c-primary); }
+.sider-link:hover { background: var(--grad-brand-soft); color: var(--c-primary); }
 .sider-link.active { background: var(--grad-brand-soft); color: var(--c-primary); font-weight: 600; }
 .sider-link .el-icon { font-size: 15px; flex-shrink: 0; }
 
-/* 顶部栏 */
+/* ===== 顶部栏（宣纸） ===== */
 .topbar {
   display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
   height: 56px; padding: 0 20px;
@@ -366,17 +384,29 @@ onMounted(() => { refreshInfo(); loadKbs() })
 }
 .topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .topbar-left .title {
-  font-size: 16px; font-weight: 600; color: var(--c-text);
+  font-family: var(--font-display);
+  font-size: 17px; font-weight: 600; letter-spacing: 0.04em;
+  color: var(--c-text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding-left: 12px;
+  position: relative;
+}
+.topbar-left .title::before {
+  content: '';
+  position: absolute; left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 16px;
+  background: var(--c-primary);
+  border-radius: 1px;
 }
 .topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .right-avatar { cursor: pointer; flex-shrink: 0; }
 .muted { color: var(--c-text-sub); }
 
-/* 内容区 */
+/* ===== 内容区 ===== */
 .content { background: var(--c-bg); padding: 20px; }
 
-/* 笔记卡片流 */
+/* ===== 笔记卡片流（宣纸卡片） ===== */
 .note-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -389,18 +419,28 @@ onMounted(() => { refreshInfo(); loadKbs() })
   background: var(--c-surface);
   border: 1px solid var(--c-border);
   border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
   cursor: pointer;
   min-height: 148px;
+  transition: transform var(--t-base), box-shadow var(--t-base), border-color var(--t-base);
+}
+.note-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--c-primary);
+  box-shadow: var(--shadow-hover);
 }
 .sk-card { cursor: default; }
+.sk-card:hover { transform: none; border-color: var(--c-border); box-shadow: var(--shadow-md); }
 .note-title {
-  font-size: 15px; font-weight: 600; color: var(--c-text);
+  font-family: var(--font-display);
+  font-size: 16px; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--c-text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding-right: 44px;
 }
 .note-summary {
   flex: 1;
-  font-size: 13px; line-height: 1.6; color: var(--c-text-sub);
+  font-size: 13px; line-height: 1.7; color: var(--c-text-sub);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
