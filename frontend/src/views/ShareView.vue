@@ -53,6 +53,9 @@
       <el-empty v-else-if="loaded" description="该知识库暂无公开笔记" />
       <div v-else class="loading"><el-skeleton :rows="6" animated /></div>
     </template>
+
+    <!-- ICP 备案号（工信部要求展示） -->
+    <IcpFooter class="share-icp" />
   </div>
 </template>
 
@@ -62,6 +65,7 @@ import { useRoute } from 'vue-router'
 import { ArrowLeft, Clock, View, Document } from '@element-plus/icons-vue'
 import { publicApi } from '@/api'
 import { hlHtml, formatDate, formatDateTime } from '@/utils/format'
+import IcpFooter from '@/components/IcpFooter.vue'
 
 const route = useRoute()
 const kbId = route.params.kbId
@@ -90,6 +94,7 @@ onMounted(async () => {
 
 <style scoped>
 .share-wrap { max-width: 980px; margin: 0 auto; padding: 24px 20px; }
+.share-icp { margin-top: 40px; }
 .head, .search { margin-bottom: 16px; }
 .head h1 { margin: 0; font-size: 22px; }
 .search-row { display: flex; gap: 10px; }

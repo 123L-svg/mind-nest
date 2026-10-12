@@ -86,6 +86,9 @@
         </div>
       </el-card>
     </div>
+
+    <!-- ICP 备案号（工信部要求展示） -->
+    <IcpFooter class="login-icp" />
   </div>
 </template>
 
@@ -94,6 +97,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { authApi } from '@/api'
+import IcpFooter from '@/components/IcpFooter.vue'
 
 const router = useRouter()
 const store = useUserStore()
@@ -196,11 +200,18 @@ async function doLogin() {
   --font-display: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
   --font-body: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
 
+  position: relative;
   min-height: 100vh;
   display: flex;
   background: var(--silk);
   color: var(--ink);
   font-family: var(--font-body);
+}
+.login-icp {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
 }
 
 /* ---------- 左侧品牌区 ---------- */
